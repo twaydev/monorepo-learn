@@ -1,0 +1,17 @@
+{
+  "globalDependencies": ["**/.env.local"],
+  "pipeline": {
+    "test": {
+      "outputs": ["coverage/**"],
+      "cache": false
+    },
+    "build": {
+      "outputs": [".next/**", "dist/**"],
+      "cache": false
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true
+    }
+  }
+}

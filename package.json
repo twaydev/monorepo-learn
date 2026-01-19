@@ -1,0 +1,10 @@
+{
+  "name": "saaas-product",
+  "version": "1.0.0",
+  "private": true,
+  "packageManager": "pnpm@10.0.0",
+  "scripts": {
+    "setup": "pnpm install && cd php-backend && composer install && cd ../go-services && go mod download",
+    "test:all": "turbo run test"
+  }
+}

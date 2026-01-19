@@ -1,0 +1,7 @@
+{
+  "name": "twaydev/infrastructure",
+  "type": "library",
+  "require": {
+    "php": ">=8.4"
+  }
+}
