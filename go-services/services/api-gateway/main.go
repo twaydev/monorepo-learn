@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"log"
 	"net/http"
 	"net/http/httputil"
@@ -37,8 +38,11 @@ func main() {
 			r.URL.Path = strings.TrimPrefix(path, "/services/go-apis")
 			goProxy.ServeHTTP(w, r)
 		case path == "/health":
-			w.WriteHeader(http.StatusOK)
-			w.Write([]byte("OK\n"))
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]string{
+				"status":  "ok",
+				"service": "go-gateway",
+			})
 		default:
 			// Route everything else to frontend
 			frontendProxy.ServeHTTP(w, r)

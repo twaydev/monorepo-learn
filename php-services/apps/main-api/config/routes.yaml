@@ -7,5 +7,7 @@
 # To list all registered routes, run the following command:
 #   bin/console debug:router
 
-controllers:
-    resource: routing.controllers
+health:
+    path: /health
+    controller: App\Controller\HealthController::health
+    methods: [GET]

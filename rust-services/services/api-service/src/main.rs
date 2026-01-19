@@ -32,12 +32,34 @@ async fn main() -> anyhow::Result<()> {
                         .unwrap_or("/");
 
                     let response = match path {
-                        "/health" => "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\nOK\n",
-                        "/" => "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\nHello from Rust API\n",
-                        _ => "HTTP/1.1 404 Not Found\r\nContent-Type: text/plain\r\n\r\nNot Found\n",
+                        "/health" => {
+                            let body = r#"{"status":"ok","service":"rust-api-service"}"#;
+                            format!(
+                                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                                body.len(),
+                                body
+                            )
+                        }
+                        "/" => {
+                            let body = "Hello from Rust API";
+                            format!(
+                                "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                                body.len(),
+                                body
+                            )
+                        }
+                        _ => {
+                            let body = "Not Found";
+                            format!(
+                                "HTTP/1.1 404 Not Found\r\nContent-Type: text/plain\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                                body.len(),
+                                body
+                            )
+                        }
                     };
 
                     let _ = socket.write_all(response.as_bytes()).await;
+                    let _ = socket.flush().await;
                 }
             }
         });

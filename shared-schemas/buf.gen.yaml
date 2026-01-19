@@ -11,9 +11,9 @@ plugins:
     opt: paths=source_relative
   # PHP
   - remote: buf.build/grpc/php
-    out: ../php/packages/api-contracts/src
+    out: ../php-services/packages/api-contracts/src
   - remote: buf.build/protocolbuffers/php
-    out: ../php/packages/api-contracts/src
+    out: ../php-services/packages/api-contracts/src
   # Rust
   - remote: buf.build/community/neoeinstein-prost
     out: ../rust-services/libs/proto/src

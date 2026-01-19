@@ -3,7 +3,7 @@ FROM dunglas/frankenphp:php8.4-alpine AS builder
 RUN apk add --no-cache git unzip
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 WORKDIR /build
-COPY php/apps/main-api/composer.json php/apps/main-api/composer.lock ./
+COPY php-services/apps/main-api/composer.json php-services/apps/main-api/composer.lock ./
 RUN composer install --no-dev --no-scripts --optimize-autoloader
 
 # Stage 2: Runtime with FrankenPHP
@@ -11,11 +11,11 @@ FROM dunglas/frankenphp:php8.4-alpine
 RUN install-php-extensions pdo_pgsql
 WORKDIR /app
 COPY --from=builder /build/vendor ./vendor
-COPY php/apps/main-api/public ./public
-COPY php/apps/main-api/src ./src
-COPY php/apps/main-api/config ./config
-COPY php/apps/main-api/bin ./bin
-COPY php/apps/main-api/.env ./.env
+COPY php-services/apps/main-api/public ./public
+COPY php-services/apps/main-api/src ./src
+COPY php-services/apps/main-api/config ./config
+COPY php-services/apps/main-api/bin ./bin
+COPY php-services/apps/main-api/.env ./.env
 RUN mkdir -p var/cache var/log && chown -R www-data:www-data var
 ENV APP_ENV=prod
 ENV SERVER_NAME=:80

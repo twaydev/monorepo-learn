@@ -20,12 +20,26 @@ services:
     environment:
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/myapp
 
+  rust-api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.rust-api
+    ports:
+      - "8082:80"
+
   go-api:
     build:
       context: ..
       dockerfile: docker/Dockerfile.go-api
     ports:
       - "8083:80"
+
+  frontend:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.frontend
+    ports:
+      - "3000:80"
 
   go-gateway:
     build:
@@ -36,26 +50,13 @@ services:
     depends_on:
       - php-api
       - go-api
+      - rust-api
       - frontend
     environment:
       PHP_BACKEND_URL: http://php-api
       RUST_BACKEND_URL: http://rust-api
       GO_BACKEND_URL: http://go-api
       FRONTEND_URL: http://frontend
-
-  frontend:
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile.frontend
-    ports:
-      - "3000:80"
-
-  rust-api:
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile.rust-api
-    ports:
-      - "8082:80"
 
 volumes:
   postgres_data:
