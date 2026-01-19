@@ -25,12 +25,22 @@ services:
       context: ..
       dockerfile: docker/Dockerfile.go-api
     ports:
+      - "8083:80"
+
+  go-gateway:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.go-gateway
+    ports:
       - "8080:80"
     depends_on:
       - php-api
+      - go-api
       - frontend
     environment:
       PHP_BACKEND_URL: http://php-api
+      RUST_BACKEND_URL: http://rust-api
+      GO_BACKEND_URL: http://go-api
       FRONTEND_URL: http://frontend
 
   frontend:

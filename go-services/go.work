@@ -3,5 +3,5 @@ go 1.24.3
 use (
 	./libs/shared-utils
 	./services/api-gateway
-	./services/worker-service
+	./services/api-service
 )

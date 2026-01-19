@@ -10,20 +10,32 @@ import (
 )
 
 func main() {
-	phpBackendURL := getEnv("PHP_BACKEND_URL", "http://php-api")
+	phpURL := getEnv("PHP_BACKEND_URL", "http://php-api")
+	rustURL := getEnv("RUST_BACKEND_URL", "http://rust-api")
+	goURL := getEnv("GO_BACKEND_URL", "http://go-api")
 	frontendURL := getEnv("FRONTEND_URL", "http://frontend")
 
-	phpProxy := createReverseProxy(phpBackendURL)
+	phpProxy := createReverseProxy(phpURL)
+	rustProxy := createReverseProxy(rustURL)
+	goProxy := createReverseProxy(goURL)
 	frontendProxy := createReverseProxy(frontendURL)
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
 
 		switch {
-		case strings.HasPrefix(path, "/api/"):
-			// Route /api/* to PHP backend
-			r.URL.Path = strings.TrimPrefix(path, "/api")
+		case strings.HasPrefix(path, "/services/php-apis"):
+			// Route /services/php-apis/* to PHP backend
+			r.URL.Path = strings.TrimPrefix(path, "/services/php-apis")
 			phpProxy.ServeHTTP(w, r)
+		case strings.HasPrefix(path, "/services/rust-apis"):
+			// Route /services/rust-apis/* to Rust backend
+			r.URL.Path = strings.TrimPrefix(path, "/services/rust-apis")
+			rustProxy.ServeHTTP(w, r)
+		case strings.HasPrefix(path, "/services/go-apis"):
+			// Route /services/go-apis/* to Go backend
+			r.URL.Path = strings.TrimPrefix(path, "/services/go-apis")
+			goProxy.ServeHTTP(w, r)
 		case path == "/health":
 			w.WriteHeader(http.StatusOK)
 			w.Write([]byte("OK\n"))
@@ -33,8 +45,10 @@ func main() {
 		}
 	})
 
-	log.Println("Starting API Gateway on :8080")
-	log.Printf("  /api/* -> %s", phpBackendURL)
+	log.Println("Starting API Gateway on :80")
+	log.Printf("  /services/php-apis/* -> %s", phpURL)
+	log.Printf("  /services/rust-apis/* -> %s", rustURL)
+	log.Printf("  /services/go-apis/* -> %s", goURL)
 	log.Printf("  /*     -> %s", frontendURL)
 	if err := http.ListenAndServe(":80", nil); err != nil {
 		log.Fatal(err)

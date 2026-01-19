@@ -1,12 +1,36 @@
 # Stage 1: Builder
 FROM rust:1.84-alpine AS builder
+
 RUN apk add --no-cache musl-dev
+
 WORKDIR /build
-COPY rust-services/ .
+
+# Copy workspace manifests for dependency caching
+COPY rust-services/Cargo.toml rust-services/Cargo.lock ./
+
+# Copy all member directories
+COPY rust-services/services ./services
+COPY rust-services/libs ./libs
+
+# Build dependencies and application (musl produces static binaries by default)
 RUN cargo build --release --package api-service
 
-# Stage 2: Runtime (ONLY BINARY)
-FROM scratch
-COPY --from=builder /build/target/release/api-service /api-service
+# Stage 2: Minimal Runtime
+FROM alpine:3.21
+
+# Install CA certificates and create non-root user
+RUN apk add --no-cache ca-certificates && \
+    addgroup -g 1000 appuser && \
+    adduser -D -u 1000 -G appuser appuser
+
+WORKDIR /app
+
+# Copy the statically linked binary
+COPY --from=builder /build/target/release/api-service /app/api-service
+
+# Use non-root user
+USER appuser
+
 EXPOSE 80
-CMD ["/api-service"]
+
+CMD ["/app/api-service"]

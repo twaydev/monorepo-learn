@@ -13,3 +13,12 @@ test:
 	cd php-backend && vendor/bin/phpunit
 	@echo "Go tests..."
 	cd go-services && go test ./...
+
+docker-up:
+	docker compose -f docker/docker-compose.yml up -d
+
+docker-down:
+	docker compose -f docker/docker-compose.yml down
+
+docker-build:
+	docker compose -f docker/docker-compose.yml build
