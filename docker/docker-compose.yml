@@ -1,0 +1,44 @@
+name: saaas-product
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_DB: myapp
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  php-api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.php-api
+    ports:
+      - "8000:80"
+    depends_on:
+      - postgres
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/myapp
+
+  go-api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.go-services
+    ports:
+      - "8080:80"
+    depends_on:
+      - php-api
+      - frontend
+    environment:
+      PHP_BACKEND_URL: http://php-api
+      FRONTEND_URL: http://frontend
+
+  frontend:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.frontend
+    ports:
+      - "3000:80"
+
+volumes:
+  postgres_data:
