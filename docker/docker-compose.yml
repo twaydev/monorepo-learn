@@ -14,7 +14,7 @@ services:
       context: ..
       dockerfile: docker/Dockerfile.php-api
     ports:
-      - "8000:80"
+      - "8081:80"
     depends_on:
       - postgres
     environment:
@@ -23,7 +23,7 @@ services:
   go-api:
     build:
       context: ..
-      dockerfile: docker/Dockerfile.go-services
+      dockerfile: docker/Dockerfile.go-api
     ports:
       - "8080:80"
     depends_on:
@@ -39,6 +39,13 @@ services:
       dockerfile: docker/Dockerfile.frontend
     ports:
       - "3000:80"
+
+  rust-api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.rust-api
+    ports:
+      - "8082:80"
 
 volumes:
   postgres_data:

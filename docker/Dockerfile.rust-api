@@ -1,0 +1,12 @@
+# Stage 1: Builder
+FROM rust:1.84-alpine AS builder
+RUN apk add --no-cache musl-dev
+WORKDIR /build
+COPY rust-services/ .
+RUN cargo build --release --package api-service
+
+# Stage 2: Runtime (ONLY BINARY)
+FROM scratch
+COPY --from=builder /build/target/release/api-service /api-service
+EXPOSE 80
+CMD ["/api-service"]

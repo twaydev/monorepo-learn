@@ -1,0 +1,13 @@
+[package]
+name = "api-service"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+shared-utils = { path = "../../libs/shared-utils" }
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+anyhow.workspace = true

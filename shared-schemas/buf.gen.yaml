@@ -2,13 +2,20 @@ version: v2
 managed:
   enabled: true
 plugins:
+  # Go
   - remote: buf.build/protocolbuffers/go
     out: ../go-services/libs/proto
     opt: paths=source_relative
   - remote: buf.build/grpc/go
     out: ../go-services/libs/proto
     opt: paths=source_relative
+  # PHP
   - remote: buf.build/grpc/php
-    out: ../php-backend/packages/api-contracts/src
+    out: ../php/packages/api-contracts/src
   - remote: buf.build/protocolbuffers/php
-    out: ../php-backend/packages/api-contracts/src
+    out: ../php/packages/api-contracts/src
+  # Rust
+  - remote: buf.build/community/neoeinstein-prost
+    out: ../rust-services/libs/proto/src
+  - remote: buf.build/community/neoeinstein-tonic
+    out: ../rust-services/libs/proto/src
