@@ -1,51 +1,61 @@
 {
-    "name": "twaydev/backend",
-    "version": "1.0.0",
-    "require": {
-        "ext-ctype": "*",
-        "ext-iconv": "*",
-        "php": ">=8.4",
-        "symfony/console": "8.0.*",
-        "symfony/dotenv": "8.0.*",
-        "symfony/flex": "^2",
-        "symfony/framework-bundle": "8.0.*",
-        "symfony/runtime": "8.0.*",
-        "symfony/yaml": "8.0.*"
-    },
-    "require-dev": {
-        "monorepo-php/monorepo": "^12.4"
-    },
-    "replace": {
-        "symfony/polyfill-ctype": "*",
-        "symfony/polyfill-iconv": "*",
-        "symfony/polyfill-php72": "*",
-        "symfony/polyfill-php73": "*",
-        "symfony/polyfill-php74": "*",
-        "symfony/polyfill-php80": "*",
-        "symfony/polyfill-php81": "*",
-        "symfony/polyfill-php82": "*",
-        "symfony/polyfill-php83": "*",
-        "symfony/polyfill-php84": "*",
-        "twaydev/application": "self.version",
-        "twaydev/domain": "self.version",
-        "twaydev/infrastructure": "self.version"
-    },
-    "minimum-stability": "a",
-    "prefer-stable": true,
-    "autoload": {
-        "psr-4": {
-            "App\\": "apps/main-api/src/"
-        }
-    },
-    "autoload-dev": {
-        "psr-4": {
-            "App\\Tests\\": "apps/main-api/tests/"
-        }
-    },
-    "extra": {
-        "symfony": {
-            "allow-contrib": false,
-            "require": "8.0.*"
-        }
+  "name": "twaydev/backend",
+  "version": "1.0.0",
+  "require": {
+    "ext-ctype": "*",
+    "ext-iconv": "*",
+    "php": ">=8.4",
+    "symfony/console": "8.0.*",
+    "symfony/dotenv": "8.0.*",
+    "symfony/flex": "^2",
+    "symfony/framework-bundle": "8.0.*",
+    "symfony/runtime": "8.0.*",
+    "symfony/yaml": "8.0.*"
+  },
+  "require-dev": {
+    "monorepo-php/monorepo": "^12.4",
+    "phpunit/phpunit": "^12.5",
+    "phpstan/phpstan": "^2.1",
+    "pact-foundation/pact-php": "^10.2"
+  },
+  "replace": {
+    "symfony/polyfill-ctype": "*",
+    "symfony/polyfill-iconv": "*",
+    "symfony/polyfill-php72": "*",
+    "symfony/polyfill-php73": "*",
+    "symfony/polyfill-php74": "*",
+    "symfony/polyfill-php80": "*",
+    "symfony/polyfill-php81": "*",
+    "symfony/polyfill-php82": "*",
+    "symfony/polyfill-php83": "*",
+    "symfony/polyfill-php84": "*",
+    "twaydev/application": "self.version",
+    "twaydev/domain": "self.version",
+    "twaydev/infrastructure": "self.version"
+  },
+  "minimum-stability": "dev",
+  "prefer-stable": true,
+  "autoload": {
+    "psr-4": {
+      "App\\": "apps/main-api/src/"
     }
+  },
+  "autoload-dev": {
+    "psr-4": {
+      "App\\Tests\\": "apps/main-api/tests/"
+    }
+  },
+  "extra": {
+    "symfony": {
+      "allow-contrib": false,
+      "require": "8.0.*"
+    }
+  },
+  "config": {
+    "allow-plugins": {
+      "symfony/flex": false,
+      "symfony/runtime": false,
+      "pact-foundation/composer-downloads-plugin": false
+    }
+  }
 }

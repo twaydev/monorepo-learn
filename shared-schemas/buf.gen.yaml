@@ -1,0 +1,14 @@
+version: v2
+managed:
+  enabled: true
+plugins:
+  - remote: buf.build/protocolbuffers/go
+    out: ../go-services/libs/proto
+    opt: paths=source_relative
+  - remote: buf.build/grpc/go
+    out: ../go-services/libs/proto
+    opt: paths=source_relative
+  - remote: buf.build/grpc/php
+    out: ../php-backend/packages/api-contracts/src
+  - remote: buf.build/protocolbuffers/php
+    out: ../php-backend/packages/api-contracts/src
