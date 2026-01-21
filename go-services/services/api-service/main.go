@@ -8,7 +8,7 @@ import (
 
 func main() {
 	http.HandleFunc("/health", healthHandler)
-	http.HandleFunc("/api/", apiHandler)
+	http.HandleFunc("/", apiHandler)
 
 	log.Println("Go API Service starting on :80")
 	if err := http.ListenAndServe(":80", nil); err != nil {

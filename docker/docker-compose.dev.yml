@@ -1,0 +1,101 @@
+name: saaas-dev
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_DB: myapp
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+  php-api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.php-api.dev
+    ports:
+      - "8081:8000"
+      - "9003:9003"
+    volumes:
+      - ../php-services:/app
+    environment:
+      APP_ENV: dev
+      APP_DEBUG: 1
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/myapp
+      XDEBUG_MODE: debug
+      XDEBUG_CONFIG: client_host=host.docker.internal client_port=9003
+    depends_on:
+      - postgres
+
+  go-gateway:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.go-gateway.dev
+    ports:
+      - "8080:80"
+      - "2346:2345"
+    volumes:
+      - ../go-services:/app
+    environment:
+      PHP_BACKEND_URL: http://php-api:8000
+      RUST_BACKEND_URL: http://rust-api:80
+      GO_BACKEND_URL: http://go-api:80
+      FRONTEND_URL: http://frontend:3000
+    depends_on:
+      - php-api
+      - go-api
+      - rust-api
+      - frontend
+
+  go-api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.go-api.dev
+    ports:
+      - "8083:80"
+      - "2345:2345"
+    volumes:
+      - ../go-services:/app
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/myapp
+
+  rust-api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.rust-api.dev
+    ports:
+      - "8082:80"
+    volumes:
+      - ../rust-services:/app
+      - rust_target:/app/target
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/myapp
+      RUST_BACKTRACE: 1
+
+  frontend:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.frontend.dev
+    ports:
+      - "3000:3000"
+    volumes:
+      - ../frontend:/app
+      - /app/node_modules
+      - /app/apps/web/.next
+    environment:
+      NODE_ENV: development
+      NEXT_TELEMETRY_DISABLED: 1
+
+volumes:
+  postgres_data:
+  redis_data:
+  rust_target:

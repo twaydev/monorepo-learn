@@ -1,0 +1,13 @@
+FROM rust:1.86-alpine
+
+RUN apk add --no-cache musl-dev
+
+# Install cargo-watch for hot-reload (use --locked for dependency version pinning)
+RUN cargo install cargo-watch --locked
+
+WORKDIR /app
+
+EXPOSE 8082
+
+# Watch for changes and rebuild/run
+CMD ["cargo", "watch", "-x", "run --package api-service"]

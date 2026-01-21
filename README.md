@@ -55,47 +55,61 @@ A polyglot microservices monorepo demonstrating a modern cloud-native architectu
 
 ```
 .
-├── docker/                    # Docker configuration
-│   ├── docker-compose.yml    # Service orchestration
-│   ├── Dockerfile.php-api    # PHP service container
-│   ├── Dockerfile.go-api     # Go service container
-│   ├── Dockerfile.rust-api   # Rust service container
-│   ├── Dockerfile.go-gateway # API gateway container
-│   └── Dockerfile.frontend   # Frontend container
+├── docker/                        # Docker configuration
+│   ├── docker-compose.yml        # Production/staging orchestration
+│   ├── docker-compose.dev.yml    # Development with hot-reload
+│   ├── Dockerfile.php-api        # PHP production container
+│   ├── Dockerfile.php-api.dev    # PHP dev with Xdebug
+│   ├── Dockerfile.go-api         # Go production container
+│   ├── Dockerfile.go-api.dev     # Go dev with Air + Delve
+│   ├── Dockerfile.go-gateway     # Gateway production container
+│   ├── Dockerfile.go-gateway.dev # Gateway dev with Air + Delve
+│   ├── Dockerfile.rust-api       # Rust production container
+│   ├── Dockerfile.rust-api.dev   # Rust dev with cargo-watch
+│   ├── Dockerfile.frontend       # Frontend production container
+│   └── Dockerfile.frontend.dev   # Frontend dev server
 │
-├── go-services/              # Go microservices
+├── go-services/                  # Go microservices
 │   ├── services/
-│   │   ├── api-service/     # Go API service
-│   │   └── api-gateway/     # API Gateway
-│   └── libs/                # Shared Go libraries
-│       └── proto/           # Generated protobuf code
+│   │   ├── api-service/         # Go API service
+│   │   └── api-gateway/         # API Gateway
+│   ├── libs/                    # Shared Go libraries
+│   │   └── proto/               # Generated protobuf code
+│   ├── .air.toml                # Air hot-reload config (API)
+│   └── .air.gateway.toml        # Air hot-reload config (Gateway)
 │
-├── rust-services/           # Rust microservices
+├── rust-services/               # Rust microservices
 │   ├── services/
-│   │   └── api-service/    # Rust API service
-│   └── libs/               # Shared Rust libraries
-│       └── shared-utils/   # Common utilities
+│   │   └── api-service/        # Rust API service
+│   └── libs/                   # Shared Rust libraries
+│       └── shared-utils/       # Common utilities
 │
-├── php-services/            # PHP microservices
+├── php-services/                # PHP microservices
 │   ├── apps/
-│   │   └── main-api/       # Symfony API application
-│   ├── packages/           # Shared PHP packages
-│   │   ├── api-contracts/  # Protobuf generated code
-│   │   ├── application/    # Application layer
-│   │   ├── domain/         # Domain layer
-│   │   └── infrastructure/ # Infrastructure layer
-│   └── tests/              # PHP tests
+│   │   └── main-api/           # Symfony API application
+│   ├── packages/               # Shared PHP packages
+│   │   ├── api-contracts/      # Protobuf generated code
+│   │   ├── application/        # Application layer
+│   │   ├── domain/             # Domain layer
+│   │   └── infrastructure/     # Infrastructure layer
+│   └── tests/                  # PHP tests
 │
-├── frontend/               # Frontend applications
+├── frontend/                   # Frontend applications
 │   ├── apps/
-│   │   ├── web/           # Next.js web application
-│   │   └── admin/         # Admin application
-│   └── packages/          # Shared frontend packages
+│   │   ├── web/               # Next.js web application
+│   │   └── admin/             # Admin application
+│   └── packages/              # Shared frontend packages
 │
-├── shared-schemas/        # Protocol Buffers schemas
-│   └── buf.gen.yaml      # Buf code generation config
+├── shared-schemas/            # Protocol Buffers schemas
+│   └── buf.gen.yaml          # Buf code generation config
 │
-└── Makefile              # Build automation
+├── docs/                      # Documentation
+│   └── LOCAL_DEVELOPMENT.md  # Local dev setup guide
+│
+├── .vscode/                   # VS Code configuration
+│   └── launch.json           # Debug configurations
+│
+└── Makefile                  # Build automation
 ```
 
 ## Services & Ports
@@ -185,30 +199,56 @@ GET http://localhost:8080/health  # Gateway health
 
 ## Development
 
-### Local Development Setup
+### Local Development with Hot-Reload
 
-#### PHP Development
+For local development with hot-reload and debugging, use the development Docker Compose setup:
+
+```bash
+# Build development containers
+make dev-build
+
+# Start development environment
+make dev-up
+
+# View logs
+make dev-logs
+
+# Stop
+make dev-down
+```
+
+**Development features:**
+- Hot-reload for all services (Air for Go, cargo-watch for Rust, Symfony CLI for PHP, Next.js HMR)
+- Xdebug for PHP debugging (port 9003)
+- Delve for Go debugging (ports 2345, 2346)
+- VS Code debug configurations included
+
+See **[docs/LOCAL_DEVELOPMENT.md](docs/LOCAL_DEVELOPMENT.md)** for the complete local development guide.
+
+### Native Development (without Docker)
+
+#### PHP
 ```bash
 cd php-services
 composer install
 vendor/bin/phpunit
 ```
 
-#### Go Development
+#### Go
 ```bash
 cd go-services
 go mod download
 go test ./...
 ```
 
-#### Rust Development
+#### Rust
 ```bash
 cd rust-services
 cargo build
 cargo test
 ```
 
-#### Frontend Development
+#### Frontend
 ```bash
 cd frontend
 pnpm install
@@ -281,22 +321,43 @@ The Go gateway provides intelligent routing:
 
 2. **Database connection issues:**
    ```bash
-   # Check PostgreSQL logs
+   # Check PostgreSQL logs (production)
    docker logs saaas-product-postgres-1
+
+   # Check PostgreSQL logs (development)
+   docker compose -f docker/docker-compose.dev.yml logs postgres
    ```
 
 3. **Service not responding:**
    ```bash
-   # Check service logs
+   # Production containers
    docker logs saaas-product-php-api-1
    docker logs saaas-product-go-api-1
    docker logs saaas-product-rust-api-1
+
+   # Development containers
+   make dev-logs-php
+   make dev-logs-go
+   make dev-logs-rust
    ```
 
 4. **Rebuild specific service:**
    ```bash
+   # Production
    docker compose -f docker/docker-compose.yml build php-api
    docker compose -f docker/docker-compose.yml up -d php-api
+
+   # Development
+   docker compose -f docker/docker-compose.dev.yml build php-api
+   docker compose -f docker/docker-compose.dev.yml up -d php-api
+   ```
+
+5. **Reset development environment:**
+   ```bash
+   make dev-down
+   docker volume rm saaas-dev_postgres_data saaas-dev_redis_data
+   make dev-build
+   make dev-up
    ```
 
 ## License

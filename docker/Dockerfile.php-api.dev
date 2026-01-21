@@ -1,0 +1,26 @@
+FROM dunglas/frankenphp:php8.4-alpine
+
+# Install dev dependencies and Xdebug
+RUN apk add --no-cache git unzip bash
+RUN install-php-extensions pdo_pgsql xdebug
+
+# Install Composer
+COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
+
+# Install Symfony CLI for dev server
+RUN curl -1sLf 'https://dl.cloudsmith.io/public/symfony/stable/setup.alpine.sh' | sh \
+    && apk add symfony-cli
+
+WORKDIR /app
+
+# Xdebug configuration
+RUN echo "xdebug.mode=debug" >> /usr/local/etc/php/conf.d/docker-php-ext-xdebug.ini \
+    && echo "xdebug.start_with_request=yes" >> /usr/local/etc/php/conf.d/docker-php-ext-xdebug.ini \
+    && echo "xdebug.client_host=host.docker.internal" >> /usr/local/etc/php/conf.d/docker-php-ext-xdebug.ini \
+    && echo "xdebug.client_port=9003" >> /usr/local/etc/php/conf.d/docker-php-ext-xdebug.ini \
+    && echo "xdebug.log=/tmp/xdebug.log" >> /usr/local/etc/php/conf.d/docker-php-ext-xdebug.ini
+
+EXPOSE 8000 9003
+
+# Use Symfony dev server for hot-reload (--allow-all-ip for container access)
+CMD ["sh", "-c", "cd /app/apps/main-api && composer install && symfony server:start --no-tls --port=8000 --allow-http --allow-all-ip"]
