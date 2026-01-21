@@ -4,14 +4,19 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"os"
 )
 
 func main() {
 	http.HandleFunc("/health", healthHandler)
 	http.HandleFunc("/", apiHandler)
 
-	log.Println("Go API Service starting on :80")
-	if err := http.ListenAndServe(":80", nil); err != nil {
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "80"
+	}
+	log.Printf("Go API Service starting on :%s", port)
+	if err := http.ListenAndServe(":"+port, nil); err != nil {
 		log.Fatal(err)
 	}
 }

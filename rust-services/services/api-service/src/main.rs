@@ -12,7 +12,11 @@ async fn main() -> anyhow::Result<()> {
         .finish();
     tracing::subscriber::set_global_default(subscriber)?;
 
-    let addr = SocketAddr::from(([0, 0, 0, 0], 80));
+    let port: u16 = std::env::var("PORT")
+        .unwrap_or_else(|_| "80".to_string())
+        .parse()
+        .expect("PORT must be a valid number");
+    let addr = SocketAddr::from(([0, 0, 0, 0], port));
     let listener = TcpListener::bind(addr).await?;
 
     info!("Rust API listening on {}", addr);

@@ -49,12 +49,13 @@ func main() {
 		}
 	})
 
-	log.Println("Starting API Gateway on :80")
+	port := getEnv("PORT", "80")
+	log.Printf("Starting API Gateway on :%s", port)
 	log.Printf("  /services/php-apis/* -> %s", phpURL)
 	log.Printf("  /services/rust-apis/* -> %s", rustURL)
 	log.Printf("  /services/go-apis/* -> %s", goURL)
 	log.Printf("  /*     -> %s", frontendURL)
-	if err := http.ListenAndServe(":80", nil); err != nil {
+	if err := http.ListenAndServe(":"+port, nil); err != nil {
 		log.Fatal(err)
 	}
 }

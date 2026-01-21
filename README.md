@@ -104,7 +104,8 @@ A polyglot microservices monorepo demonstrating a modern cloud-native architectu
 │   └── buf.gen.yaml          # Buf code generation config
 │
 ├── docs/                      # Documentation
-│   └── LOCAL_DEVELOPMENT.md  # Local dev setup guide
+│   ├── LOCAL_DEVELOPMENT.md  # Local dev setup guide
+│   └── RAILWAY_DEPLOYMENT.md # Railway deployment guide
 │
 ├── .vscode/                   # VS Code configuration
 │   └── launch.json           # Debug configurations
@@ -288,6 +289,22 @@ The Go gateway provides intelligent routing:
 - **Alpine-based images**: Minimal attack surface
 - **Health checks**: Built-in service health monitoring
 - **Environment configuration**: 12-factor app compliance
+
+## Deployment
+
+### Railway Deployment
+
+This project is configured for deployment to Railway with automated CI/CD:
+
+- **Production**: Auto-deploys on push to `main` branch
+- **Staging**: Auto-deploys on push to `staging` branch
+- **PR Previews**: Automatically created for pull requests
+
+GitHub Actions workflows:
+- `deploy-railway.yml` - Full deployment pipeline with environment management
+- `build-images.yml` - Docker image builds to GHCR
+
+See **[docs/RAILWAY_DEPLOYMENT.md](docs/RAILWAY_DEPLOYMENT.md)** for the complete deployment guide.
 
 ## Production Considerations
 
