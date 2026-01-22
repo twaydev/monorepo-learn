@@ -1,122 +1,36 @@
-name: Build and Push Images
+name: Build Docker Images
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
 
+env:
+  DOCKER_REGISTRY: ghcr.io
+  REGISTRY_IMAGE: ${{ github.repository }}
+
 jobs:
-  build-php:
-    runs-on: ubuntu-latest
-    permissions:
-      packages: write
-    steps:
-      - uses: actions/checkout@v4
-      - uses: docker/setup-buildx-action@v3
-      - uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./docker/Dockerfile.php-api
-          push: true
-          tags: |
-            ghcr.io/${{ github.repository }}/php-api:latest
-            ghcr.io/${{ github.repository }}/php-api:${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-  build-go:
-    runs-on: ubuntu-latest
-    permissions:
-      packages: write
-    steps:
-      - uses: actions/checkout@v4
-      - uses: docker/setup-buildx-action@v3
-      - uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./docker/Dockerfile.go-api
-          push: true
-          tags: |
-            ghcr.io/${{ github.repository }}/go-api:latest
-            ghcr.io/${{ github.repository }}/go-api:${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-  build-go-gateway:
-    runs-on: ubuntu-latest
-    permissions:
-      packages: write
-    steps:
-      - uses: actions/checkout@v4
-      - uses: docker/setup-buildx-action@v3
-      - uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./docker/Dockerfile.go-gateway
-          push: true
-          tags: |
-            ghcr.io/${{ github.repository }}/api-gateway:latest
-            ghcr.io/${{ github.repository }}/api-gateway:${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-  build-frontend:
-    runs-on: ubuntu-latest
-    permissions:
-      packages: write
-    steps:
-      - uses: actions/checkout@v4
-      - uses: docker/setup-buildx-action@v3
-      - uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./docker/Dockerfile.frontend
-          push: true
-          tags: |
-            ghcr.io/${{ github.repository }}/frontend:latest
-            ghcr.io/${{ github.repository }}/frontend:${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-  build-rust:
-    runs-on: ubuntu-latest
-    permissions:
-      packages: write
-    steps:
-      - uses: actions/checkout@v4
-      - uses: docker/setup-buildx-action@v3
-      - uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./docker/Dockerfile.rust-api
-          push: true
-          tags: |
-            ghcr.io/${{ github.repository }}/rust-api:latest
-            ghcr.io/${{ github.repository }}/rust-api:${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+  # Build matrix strategy for multiple services
+  build-matrix:
+    name: Build ${{ matrix.image-name }}
+    uses: ./.github/workflows/build-image.yml
+    strategy:
+      matrix:
+        include:
+          - image-name: php-api
+            dockerfile: ./docker/Dockerfile.php-api
+            context: .
+            platforms: linux/amd64
+    with:
+      dockerfile: ${{ matrix.dockerfile }}
+      image-name: ${{ matrix.image-name }}
+      context: ${{ matrix.context }}
+      platforms: ${{ matrix.platforms }}
+      push: ${{ github.ref == 'refs/heads/main' && github.event_name == 'push' }}
+      cache-key: ${{ github.ref_name }}
+    secrets: inherit
