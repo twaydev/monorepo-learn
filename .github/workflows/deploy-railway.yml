@@ -83,23 +83,25 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-  # Deploy to Railway
+  # Deploy to Railway - triggers redeploy of services configured to use GHCR images
   deploy:
     needs: [setup, build-images]
     if: needs.setup.outputs.should_deploy == 'true'
     runs-on: ubuntu-latest
     environment: ${{ needs.setup.outputs.environment }}
+    strategy:
+      matrix:
+        service: [frontend, api-gateway, php-api, go-api, rust-api]
     steps:
-      - uses: actions/checkout@v4
-
       - name: Install Railway CLI
         run: npm install -g @railway/cli
 
-      - name: Deploy to Railway
+      - name: Trigger redeploy for ${{ matrix.service }}
         run: |
-          railway up --environment ${{ needs.setup.outputs.environment }}
+          railway redeploy --service ${{ matrix.service }} -y
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        continue-on-error: true
 
   # Run database migrations (production/staging only)
   migrate:
