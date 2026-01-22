@@ -10,6 +10,7 @@ NC='\033[0m' # No Color
 
 # Project configuration
 PROJECT_NAME="saaas-product"
+GHCR_REPO="ghcr.io/twaydev/monorepo-learn"
 
 echo -e "${BLUE}================================================${NC}"
 echo -e "${BLUE}  Railway Infrastructure Setup - ${PROJECT_NAME}${NC}"
@@ -167,6 +168,7 @@ echo ""
 # Frontend service
 echo -n "Creating frontend service... "
 if railway add --service "frontend" \
+    --image "${GHCR_REPO}/frontend:latest" \
     --variables "NODE_ENV=production" \
     --variables "PORT=3000" 2>/dev/null; then
     echo -e "${GREEN}✓${NC}"
@@ -178,6 +180,7 @@ fi
 # API Gateway service
 echo -n "Creating api-gateway service... "
 if railway add --service "api-gateway" \
+    --image "${GHCR_REPO}/api-gateway:latest" \
     --variables "PHP_BACKEND_URL=http://php-api.railway.internal" \
     --variables "RUST_BACKEND_URL=http://rust-api.railway.internal" \
     --variables "GO_BACKEND_URL=http://go-api.railway.internal" \
@@ -197,6 +200,7 @@ fi
 # PHP API service
 echo -n "Creating php-api service... "
 if railway add --service "php-api" \
+    --image "${GHCR_REPO}/php-api:latest" \
     --variables "APP_ENV=prod" \
     --variables "APP_SECRET=${APP_SECRET}" \
     --variables "DATABASE_URL=${DB_URL_REF}" \
@@ -214,6 +218,7 @@ fi
 # Go API service
 echo -n "Creating go-api service... "
 if railway add --service "go-api" \
+    --image "${GHCR_REPO}/go-api:latest" \
     --variables "DATABASE_URL=${DB_URL_REF}" \
     --variables "PORT=80" 2>/dev/null; then
     echo -e "${GREEN}✓${NC}"
@@ -227,6 +232,7 @@ fi
 # Rust API service
 echo -n "Creating rust-api service... "
 if railway add --service "rust-api" \
+    --image "${GHCR_REPO}/rust-api:latest" \
     --variables "DATABASE_URL=${DB_URL_REF}" \
     --variables "RUST_BACKTRACE=0" \
     --variables "PORT=80" 2>/dev/null; then
