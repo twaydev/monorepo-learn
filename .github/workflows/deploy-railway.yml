@@ -5,6 +5,7 @@ on:
     branches: [main, staging]
   pull_request:
     types: [opened, synchronize, reopened, closed]
+  workflow_dispatch:
 
 env:
   RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
