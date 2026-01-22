@@ -19,6 +19,8 @@ jobs:
   build-matrix:
     name: Build ${{ matrix.image-name }}
     uses: ./.github/workflows/build-image.yml
+    permissions:
+      packages: write
     strategy:
       matrix:
         include:
