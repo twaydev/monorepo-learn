@@ -44,3 +44,19 @@ dev-logs-frontend:
 # Restart individual services
 dev-restart-%:
 	docker compose -f docker/docker-compose.dev.yml restart $*
+
+# Railway deployment commands
+railway-init:
+	./scripts/railway-init.sh
+
+railway-status:
+	railway status
+
+railway-logs:
+	railway logs
+
+railway-open:
+	railway open
+
+railway-deploy:
+	railway up

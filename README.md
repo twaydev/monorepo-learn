@@ -103,6 +103,9 @@ A polyglot microservices monorepo demonstrating a modern cloud-native architectu
 ├── shared-schemas/            # Protocol Buffers schemas
 │   └── buf.gen.yaml          # Buf code generation config
 │
+├── scripts/                   # Automation scripts
+│   └── railway-init.sh       # Railway infrastructure setup
+│
 ├── docs/                      # Documentation
 │   ├── LOCAL_DEVELOPMENT.md  # Local dev setup guide
 │   └── RAILWAY_DEPLOYMENT.md # Railway deployment guide
@@ -296,11 +299,25 @@ The Go gateway provides intelligent routing:
 
 This project is configured for deployment to Railway with automated CI/CD:
 
+```bash
+# Run the automated setup script
+make railway-init
+```
+
+This will guide you through:
+1. Railway CLI installation check
+2. Authentication
+3. Project creation
+4. Database setup
+5. Service creation with environment variables
+6. GitHub secret configuration
+
+**Deployment triggers:**
 - **Production**: Auto-deploys on push to `main` branch
 - **Staging**: Auto-deploys on push to `staging` branch
 - **PR Previews**: Automatically created for pull requests
 
-GitHub Actions workflows:
+**GitHub Actions workflows:**
 - `deploy-railway.yml` - Full deployment pipeline with environment management
 - `build-images.yml` - Docker image builds to GHCR
 

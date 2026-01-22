@@ -2,6 +2,24 @@
 
 This guide covers deploying the SaaS Product monorepo to Railway with automated CI/CD via GitHub Actions.
 
+## Quick Start
+
+Run the automated setup script:
+
+```bash
+make railway-init
+# or
+./scripts/railway-init.sh
+```
+
+This script will:
+1. Check Railway CLI installation
+2. Authenticate with Railway
+3. Create/link a Railway project
+4. Add PostgreSQL database
+5. Create all services with environment variables
+6. Guide you through GitHub secret setup
+
 ## Architecture Overview
 
 ```
@@ -27,35 +45,64 @@ Railway Project: saaas-product
 ## Prerequisites
 
 1. [Railway account](https://railway.app)
-2. [Railway CLI](https://docs.railway.app/develop/cli) installed: `npm install -g @railway/cli`
+2. [Railway CLI](https://docs.railway.com/guides/cli) installed
 3. GitHub repository with push access
 4. Docker images pushed to GHCR (GitHub Container Registry)
 
-## Initial Railway Setup
-
-### 1. Create Railway Project
+### Installing Railway CLI
 
 ```bash
-# Login to Railway
+# npm
+npm install -g @railway/cli
+
+# Homebrew (macOS)
+brew install railway
+
+# Shell script
+curl -fsSL https://railway.app/install.sh | sh
+```
+
+For more details: https://docs.railway.com/guides/cli#installing-the-cli
+
+## Manual Railway Setup
+
+If you prefer manual setup over the automated script:
+
+### 1. Authenticate with Railway
+
+```bash
+# Browser login (interactive)
 railway login
 
+# Token login (CI/headless)
+railway login --browserless
+```
+
+For more details: https://docs.railway.com/guides/cli#authenticating-with-the-cli
+
+### 2. Create or Link Project
+
+```bash
 # Create new project
-railway init
+railway init --name saaas-product
 
 # Or link to existing project
 railway link
 ```
 
-### 2. Add PostgreSQL Database
+For more details: https://docs.railway.com/guides/cli#create-a-project
 
-1. Go to Railway Dashboard
-2. Click "New" → "Database" → "PostgreSQL"
-3. Railway will automatically create `DATABASE_URL` variable
-
-### 3. Add Services
+### 3. Add PostgreSQL Database
 
 ```bash
-# Add each service
+railway add --database postgres
+```
+
+For more details: https://docs.railway.com/guides/cli#add-database-service
+
+### 4. Create Services
+
+```bash
 railway service create frontend
 railway service create api-gateway
 railway service create php-api
@@ -63,12 +110,13 @@ railway service create go-api
 railway service create rust-api
 ```
 
-### 4. Create Environments
+### 5. Create Staging Environment
 
-In Railway Dashboard:
-1. Go to Settings → Environments
-2. Create `staging` environment
-3. PR environments are created automatically by the workflow
+```bash
+railway environment create staging
+```
+
+PR environments are created automatically by the GitHub workflow
 
 ## Environment Variables
 
