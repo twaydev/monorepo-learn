@@ -70,6 +70,18 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            ${{ secrets.DOCKER_USERNAME != '' && format('{0}/{1}', secrets.DOCKER_REGISTRY || 'docker.io', inputs.image-name) || format('ghcr.io/{0}/{1}', github.repository_owner, inputs.image-name) }}
+          tags: |
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
       - name: Build and push image
         uses: docker/build-push-action@v5
         with:
