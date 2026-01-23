@@ -1,0 +1,72 @@
+name: CD - Deploy Production
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  setup:
+    name: Setup
+    runs-on: ubuntu-latest
+    outputs:
+      version-tag: ${{ steps.version.outputs.version-tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Calculate version
+        id: version
+        run: |
+          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          LATEST_VERSION="${LATEST_TAG#v}"
+
+          MAJOR=$(echo $LATEST_VERSION | cut -d. -f1)
+          MINOR=$(echo $LATEST_VERSION | cut -d. -f2)
+          PATCH=$(echo $LATEST_VERSION | cut -d. -f3 | cut -d- -f1)
+
+          COMMIT_MSG=$(git log -1 --pretty=%B)
+
+          if [[ $COMMIT_MSG == *"BREAKING CHANGE"* ]]; then
+            MAJOR=$((MAJOR + 1))
+            MINOR=0
+            PATCH=0
+          elif [[ $COMMIT_MSG == feat:* ]]; then
+            MINOR=$((MINOR + 1))
+            PATCH=0
+          elif [[ $COMMIT_MSG == fix:* ]]; then
+            PATCH=$((PATCH + 1))
+          fi
+
+          NEW_VERSION="$MAJOR.$MINOR.$PATCH"
+          echo "version-tag=v${NEW_VERSION}" >> $GITHUB_OUTPUT
+
+  build:
+    name: Build
+    needs: setup
+    uses: ./.github/workflows/_reusable/build.yml
+    with:
+      environment: production
+      version-tag: ${{ needs.setup.outputs.version-tag }}
+
+  deploy:
+    name: Deploy
+    needs: [setup, build]
+    uses: ./.github/workflows/_reusable/deploy.yml
+    with:
+      environment: production
+      version-tag: ${{ needs.setup.outputs.version-tag }}
+    secrets:
+      RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
+      RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
+
+  notify:
+    name: Notify
+    needs: [setup, deploy]
+    if: success()
+    uses: ./.github/workflows/_reusable/notify.yml
+    with:
+      environment: production
+      version-tag: ${{ needs.setup.outputs.version-tag }}
+      status: success
+      event-type: release

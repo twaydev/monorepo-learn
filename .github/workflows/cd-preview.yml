@@ -1,0 +1,72 @@
+name: PR - Preview Environment
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  setup:
+    name: Setup
+    runs-on: ubuntu-latest
+    outputs:
+      version-tag: ${{ steps.version.outputs.version-tag }}
+      pr-number: ${{ steps.info.outputs.pr-number }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get PR info
+        id: info
+        run: echo "pr-number=${{ github.event.pull_request.number }}" >> $GITHUB_OUTPUT
+
+      - name: Generate version tag
+        id: version
+        run: |
+          PR_NUM=${{ github.event.pull_request.number }}
+          COMMIT_SHA=$(git rev-parse --short HEAD)
+          echo "version-tag=pr-${PR_NUM}-${COMMIT_SHA}" >> $GITHUB_OUTPUT
+
+  build:
+    name: Build
+    needs: setup
+    uses: ./.github/workflows/_reusable/build.yml
+    with:
+      environment: preview
+      version-tag: ${{ needs.setup.outputs.version-tag }}
+      pr-number: ${{ needs.setup.outputs.pr-number }}
+
+  deploy:
+    name: Deploy
+    needs: [setup, build]
+    uses: ./.github/workflows/_reusable/deploy.yml
+    with:
+      environment: preview
+      version-tag: ${{ needs.setup.outputs.version-tag }}
+      pr-number: ${{ needs.setup.outputs.pr-number }}
+    secrets:
+      RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN_PREVIEW }}
+      RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID_PREVIEW }}
+
+  notify:
+    name: Notify
+    needs: [setup, deploy]
+    if: success()
+    uses: ./.github/workflows/_reusable/notify.yml
+    with:
+      environment: preview
+      version-tag: ${{ needs.setup.outputs.version-tag }}
+      pr-number: ${{ needs.setup.outputs.pr-number }}
+      status: success
+      event-type: pr-preview
+
+  cleanup-on-close:
+    name: Cleanup (PR Closed)
+    if: github.event.action == 'closed'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Cleanup resources
+        uses: ./.github/workflows/_reusable/cleanup.yml
+        with:
+          pr-number: ${{ github.event.pull_request.number }}
+        secrets:
+          RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN_PREVIEW }}
+          RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID_PREVIEW }}

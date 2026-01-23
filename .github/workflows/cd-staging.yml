@@ -1,0 +1,52 @@
+name: CD - Deploy Staging
+
+on:
+  push:
+    branches: [develop]
+
+jobs:
+  setup:
+    name: Setup
+    runs-on: ubuntu-latest
+    outputs:
+      version-tag: ${{ steps.version.outputs.version-tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Calculate version
+        id: version
+        run: |
+          BUILD_NUM=$(git rev-list --count HEAD)
+          echo "version-tag=v1.0.0-staging.${BUILD_NUM}" >> $GITHUB_OUTPUT
+
+  build:
+    name: Build
+    needs: setup
+    uses: ./.github/workflows/_reusable/build.yml
+    with:
+      environment: staging
+      version-tag: ${{ needs.setup.outputs.version-tag }}
+
+  deploy:
+    name: Deploy
+    needs: [setup, build]
+    uses: ./.github/workflows/_reusable/deploy.yml
+    with:
+      environment: staging
+      version-tag: ${{ needs.setup.outputs.version-tag }}
+    secrets:
+      RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN_STAGING }}
+      RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID_STAGING }}
+
+  notify:
+    name: Notify
+    needs: [setup, deploy]
+    if: success()
+    uses: ./.github/workflows/_reusable/notify.yml
+    with:
+      environment: staging
+      version-tag: ${{ needs.setup.outputs.version-tag }}
+      status: success
+      event-type: deployment
