@@ -11,6 +11,11 @@ on:
         description: "Image version tag"
         required: true
         type: string
+      service:
+        description: "Railway service name to deploy"
+        required: false
+        type: string
+        default: ""
       pr-number:
         description: "PR number (if applicable)"
         required: false
@@ -19,8 +24,6 @@ on:
     secrets:
       RAILWAY_TOKEN:
         required: true
-      RAILWAY_PROJECT_ID:
-        required: false
 
 jobs:
   deploy:
@@ -45,13 +48,19 @@ jobs:
           echo "========================================"
           echo "Deploying to ${{ inputs.environment }}"
           echo "Version: ${{ inputs.version-tag }}"
+          echo "Service: ${{ inputs.service || 'default' }}"
           echo "========================================"
 
-          # Deploy using railway up (project token already set via RAILWAY_TOKEN)
-          railway up -d
+          # Deploy using railway up with service flag if specified
+          if [ -n "${{ inputs.service }}" ]; then
+            railway up -d --service "${{ inputs.service }}"
+          else
+            railway up -d
+          fi
 
       - name: Deployment summary
         run: |
           echo "## Deployment Complete" >> $GITHUB_STEP_SUMMARY
           echo "- **Environment:** ${{ inputs.environment }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Version:** ${{ inputs.version-tag }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Service:** ${{ inputs.service || 'default' }}" >> $GITHUB_STEP_SUMMARY
