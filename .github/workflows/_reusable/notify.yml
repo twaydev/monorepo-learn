@@ -1,0 +1,84 @@
+name: Notifications (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        required: true
+        type: string
+      version-tag:
+        required: true
+        type: string
+      pr-number:
+        required: false
+        type: string
+        default: ""
+      status:
+        required: true
+        type: string
+      event-type:
+        description: "Event type (deployment|release|pr-preview)"
+        required: true
+        type: string
+
+jobs:
+  notify:
+    name: Send Notifications
+    runs-on: ubuntu-latest
+    steps:
+      - name: Notify GitHub PR (Preview)
+        if: inputs.event-type == 'pr-preview'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const comment = `🚀 **Preview Environment Deployed**
+
+            **Version:** \`${{ inputs.version-tag }}\`
+            **Environment:** ${{ inputs.environment }}
+
+            **Services:**
+            - PHP API: https://pr-${{ inputs.pr-number }}-php-api.preview.railway.app
+            - Frontend: https://pr-${{ inputs.pr-number }}-frontend.preview.railway.app
+            - Go Worker: https://pr-${{ inputs.pr-number }}-go-worker.preview.railway.app
+
+            ⚠️ This environment will be **automatically deleted** when the PR is closed.`;
+
+            github.rest.issues.createComment({
+              issue_number: ${{ inputs.pr-number }},
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            })
+
+      - name: Create GitHub Release (Production)
+        if: inputs.event-type == 'release'
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ inputs.version-tag }}
+          release_name: Release ${{ inputs.version-tag }}
+          body: |
+            ✅ **Production Release**
+
+            Version: ${{ inputs.version-tag }}
+            Status: ${{ inputs.status }}
+          draft: false
+          prerelease: false
+
+      - name: Update PR Status (Staging)
+        if: inputs.event-type == 'deployment' && inputs.environment == 'staging'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const comment = `✅ Deployed to Staging
+
+            **Version:** \`${{ inputs.version-tag }}\`
+            **Status:** ${{ inputs.status }}`;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            })

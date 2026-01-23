@@ -1,0 +1,85 @@
+name: Deploy to Environment (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: "Target environment"
+        required: true
+        type: string
+      version-tag:
+        description: "Image version tag"
+        required: true
+        type: string
+      pr-number:
+        description: "PR number (if applicable)"
+        required: false
+        type: string
+        default: ""
+    secrets:
+      RAILWAY_API_TOKEN:
+        required: true
+      RAILWAY_PROJECT_ID:
+        required: true
+
+jobs:
+  deploy:
+    name: Deploy to ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+
+      - name: Link Railway project
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
+        run: railway link ${{ secrets.RAILWAY_PROJECT_ID }}
+
+      - name: Deploy services
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
+        run: |
+          SERVICES=("php-api" "go-worker" "frontend" "nginx")
+
+          for service in "${SERVICES[@]}"; do
+            SERVICE_NAME="$service"
+
+            # Prefix service name for preview
+            if [ "${{ inputs.environment }}" = "preview" ]; then
+              SERVICE_NAME="pr-${{ inputs.pr-number }}-${service}"
+            elif [ "${{ inputs.environment }}" = "staging" ]; then
+              SERVICE_NAME="${service}-staging"
+            fi
+
+            echo "Deploying $SERVICE_NAME..."
+            railway service "$SERVICE_NAME" || railway service create --name "$SERVICE_NAME"
+            railway deploy "ghcr.io/${{ github.repository }}/${service}:${{ inputs.version-tag }}" --raw
+
+            sleep 5
+          done
+
+      - name: Verify deployment
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
+        run: |
+          SERVICES=("php-api" "go-worker" "frontend" "nginx")
+
+          for service in "${SERVICES[@]}"; do
+            SERVICE_NAME="$service"
+            if [ "${{ inputs.environment }}" = "preview" ]; then
+              SERVICE_NAME="pr-${{ inputs.pr-number }}-${service}"
+            elif [ "${{ inputs.environment }}" = "staging" ]; then
+              SERVICE_NAME="${service}-staging"
+            fi
+
+            echo "Checking $SERVICE_NAME status..."
+            railway logs --service "$SERVICE_NAME" --tail 20 || true
+          done

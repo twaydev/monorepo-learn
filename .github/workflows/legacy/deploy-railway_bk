@@ -1,0 +1,349 @@
+name: Deploy to Railway
+
+on:
+  push:
+    branches: [main, staging]
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+  workflow_dispatch:
+    inputs:
+      force_all:
+        description: 'Force build all services'
+        required: false
+        default: 'false'
+        type: boolean
+
+env:
+  RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+
+jobs:
+  # Determine deployment environment and detect changes
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      environment: ${{ steps.set-env.outputs.environment }}
+      should_deploy: ${{ steps.set-env.outputs.should_deploy }}
+      frontend_changed: ${{ steps.changes.outputs.frontend }}
+      api_gateway_changed: ${{ steps.changes.outputs.api_gateway }}
+      php_api_changed: ${{ steps.changes.outputs.php_api }}
+      go_api_changed: ${{ steps.changes.outputs.go_api }}
+      rust_api_changed: ${{ steps.changes.outputs.rust_api }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: set-env
+        run: |
+          if [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" == "refs/heads/main" ]]; then
+            echo "environment=production" >> $GITHUB_OUTPUT
+            echo "should_deploy=true" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" == "refs/heads/staging" ]]; then
+            echo "environment=staging" >> $GITHUB_OUTPUT
+            echo "should_deploy=true" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.event_name }}" == "pull_request" && "${{ github.event.action }}" != "closed" ]]; then
+            echo "environment=pr-${{ github.event.pull_request.number }}" >> $GITHUB_OUTPUT
+            echo "should_deploy=true" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "environment=production" >> $GITHUB_OUTPUT
+            echo "should_deploy=true" >> $GITHUB_OUTPUT
+          else
+            echo "should_deploy=false" >> $GITHUB_OUTPUT
+          fi
+
+      - uses: dorny/paths-filter@v3
+        id: changes
+        with:
+          filters: |
+            frontend:
+              - 'frontend/**'
+              - 'docker/Dockerfile.frontend'
+            api_gateway:
+              - 'go-services/services/api-gateway/**'
+              - 'docker/Dockerfile.go-gateway'
+            php_api:
+              - 'php-services/**'
+              - 'docker/Dockerfile.php-api'
+            go_api:
+              - 'go-services/services/api-service/**'
+              - 'go-services/libs/**'
+              - 'docker/Dockerfile.go-api'
+            rust_api:
+              - 'rust-services/**'
+              - 'docker/Dockerfile.rust-api'
+
+  # Build Frontend
+  build-frontend:
+    needs: setup
+    if: |
+      needs.setup.outputs.should_deploy == 'true' &&
+      (needs.setup.outputs.frontend_changed == 'true' || github.event.inputs.force_all == 'true')
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate image tag
+        id: tag
+        run: |
+          if [[ "${{ needs.setup.outputs.environment }}" == "production" ]]; then
+            echo "tag=latest" >> $GITHUB_OUTPUT
+          else
+            echo "tag=${{ needs.setup.outputs.environment }}" >> $GITHUB_OUTPUT
+          fi
+
+      - uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./docker/Dockerfile.frontend
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}/frontend:${{ steps.tag.outputs.tag }}
+            ghcr.io/${{ github.repository }}/frontend:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # Build API Gateway
+  build-api-gateway:
+    needs: setup
+    if: |
+      needs.setup.outputs.should_deploy == 'true' &&
+      (needs.setup.outputs.api_gateway_changed == 'true' || github.event.inputs.force_all == 'true')
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate image tag
+        id: tag
+        run: |
+          if [[ "${{ needs.setup.outputs.environment }}" == "production" ]]; then
+            echo "tag=latest" >> $GITHUB_OUTPUT
+          else
+            echo "tag=${{ needs.setup.outputs.environment }}" >> $GITHUB_OUTPUT
+          fi
+
+      - uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./docker/Dockerfile.go-gateway
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}/api-gateway:${{ steps.tag.outputs.tag }}
+            ghcr.io/${{ github.repository }}/api-gateway:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # Build PHP API
+  build-php-api:
+    needs: setup
+    if: |
+      needs.setup.outputs.should_deploy == 'true' &&
+      (needs.setup.outputs.php_api_changed == 'true' || github.event.inputs.force_all == 'true')
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate image tag
+        id: tag
+        run: |
+          if [[ "${{ needs.setup.outputs.environment }}" == "production" ]]; then
+            echo "tag=latest" >> $GITHUB_OUTPUT
+          else
+            echo "tag=${{ needs.setup.outputs.environment }}" >> $GITHUB_OUTPUT
+          fi
+
+      - uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./docker/Dockerfile.php-api
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}/php-api:${{ steps.tag.outputs.tag }}
+            ghcr.io/${{ github.repository }}/php-api:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # Build Go API
+  build-go-api:
+    needs: setup
+    if: |
+      needs.setup.outputs.should_deploy == 'true' &&
+      (needs.setup.outputs.go_api_changed == 'true' || github.event.inputs.force_all == 'true')
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate image tag
+        id: tag
+        run: |
+          if [[ "${{ needs.setup.outputs.environment }}" == "production" ]]; then
+            echo "tag=latest" >> $GITHUB_OUTPUT
+          else
+            echo "tag=${{ needs.setup.outputs.environment }}" >> $GITHUB_OUTPUT
+          fi
+
+      - uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./docker/Dockerfile.go-api
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}/go-api:${{ steps.tag.outputs.tag }}
+            ghcr.io/${{ github.repository }}/go-api:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # Build Rust API
+  build-rust-api:
+    needs: setup
+    if: |
+      needs.setup.outputs.should_deploy == 'true' &&
+      (needs.setup.outputs.rust_api_changed == 'true' || github.event.inputs.force_all == 'true')
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate image tag
+        id: tag
+        run: |
+          if [[ "${{ needs.setup.outputs.environment }}" == "production" ]]; then
+            echo "tag=latest" >> $GITHUB_OUTPUT
+          else
+            echo "tag=${{ needs.setup.outputs.environment }}" >> $GITHUB_OUTPUT
+          fi
+
+      - uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./docker/Dockerfile.rust-api
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}/rust-api:${{ steps.tag.outputs.tag }}
+            ghcr.io/${{ github.repository }}/rust-api:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # Deploy to Railway - only redeploy services that were built
+  deploy:
+    needs: [setup, build-frontend, build-api-gateway, build-php-api, build-go-api, build-rust-api]
+    if: |
+      always() &&
+      needs.setup.outputs.should_deploy == 'true' &&
+      (needs.build-frontend.result == 'success' ||
+       needs.build-api-gateway.result == 'success' ||
+       needs.build-php-api.result == 'success' ||
+       needs.build-go-api.result == 'success' ||
+       needs.build-rust-api.result == 'success')
+    runs-on: ubuntu-latest
+    environment: ${{ needs.setup.outputs.environment }}
+    steps:
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+
+      - name: Redeploy frontend
+        if: needs.build-frontend.result == 'success'
+        run: railway redeploy --service frontend -y
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        continue-on-error: true
+
+      - name: Redeploy api-gateway
+        if: needs.build-api-gateway.result == 'success'
+        run: railway redeploy --service api-gateway -y
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        continue-on-error: true
+
+      - name: Redeploy php-api
+        if: needs.build-php-api.result == 'success'
+        run: railway redeploy --service php-api -y
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        continue-on-error: true
+
+      - name: Redeploy go-api
+        if: needs.build-go-api.result == 'success'
+        run: railway redeploy --service go-api -y
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        continue-on-error: true
+
+      - name: Redeploy rust-api
+        if: needs.build-rust-api.result == 'success'
+        run: railway redeploy --service rust-api -y
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        continue-on-error: true
+
+  # Run database migrations (production/staging only)
+  migrate:
+    needs: [setup, deploy]
+    if: |
+      always() &&
+      needs.deploy.result == 'success' &&
+      (needs.setup.outputs.environment == 'production' || needs.setup.outputs.environment == 'staging')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+
+      - name: Run migrations
+        run: |
+          railway run --service php-api --environment ${{ needs.setup.outputs.environment }} \
+            php bin/console doctrine:migrations:migrate --no-interaction
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        continue-on-error: true
+
+  # Cleanup PR environments
+  cleanup-pr:
+    if: github.event_name == 'pull_request' && github.event.action == 'closed'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+
+      - name: Delete PR environment
+        run: |
+          railway environment delete pr-${{ github.event.pull_request.number }} --yes || true
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}

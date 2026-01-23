@@ -1,0 +1,29 @@
+# Default owners (nếu không match rule nào)
+* @twaydev/no-team
+
+# Workflows - DevOps team
+.github/workflows/ @twaydev/devops-team
+
+# PHP Services
+/services/php-services/ @twaydev/php-team
+/docker/Dockerfile.php-api.dev @twaydev/php-team
+/docker/Dockerfile.php-api @twaydev/devops-team
+
+# Go Services
+/services/go-services/ @twaydev/go-team
+/docker/Dockerfile.go-api.dev @twaydev/go-team
+/docker/Dockerfile.go-api @twaydev/devops-team
+
+# Rust Services
+/services/rust-services/ @twaydev/rust-team
+/docker/Dockerfile.rust-api.dev @twaydev/rust-team
+/docker/Dockerfile.rust-api @twaydev/devops-team
+
+# Frontend
+/services/frontend/ @twaydev/frontend-team
+/docker/Dockerfile.frontend.dev @twaydev/frontend-team
+/docker/Dockerfile.frontend @twaydev/devops-team
+
+# Docs
+/docs/ @twaydev/tech-lead
+README.md @twaydev/tech-lead

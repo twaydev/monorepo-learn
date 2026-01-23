@@ -1,0 +1,86 @@
+name: Build Docker Images (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: "Environment (production|staging|preview)"
+        required: true
+        type: string
+      version-tag:
+        description: "Version tag for image"
+        required: true
+        type: string
+      pr-number:
+        description: "PR number (if preview)"
+        required: false
+        type: string
+        default: ""
+    outputs:
+      build-status:
+        description: "Build status"
+        value: ${{ jobs.build.outputs.status }}
+
+jobs:
+  build:
+    name: Build Images
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      status: ${{ steps.build-result.outputs.status }}
+    strategy:
+      matrix:
+        include:
+          - image-name: php-api
+            dockerfile: ./docker/Dockerfile.php-api
+            context: ./services/php-api
+
+          - image-name: go-worker
+            dockerfile: ./docker/Dockerfile.go-worker
+            context: ./services/go-worker
+
+          - image-name: frontend
+            dockerfile: ./docker/Dockerfile.frontend
+            context: ./services/frontend
+
+          - image-name: nginx
+            dockerfile: ./docker/Dockerfile.nginx
+            context: ./nginx
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}/${{ matrix.image-name }}
+          tags: |
+            type=raw,value=${{ inputs.version-tag }}
+            type=raw,value=${{ inputs.environment }}-latest
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=${{ matrix.image-name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image-name }}
+
+      - name: Set build status
+        id: build-result
+        run: echo "status=success" >> $GITHUB_OUTPUT

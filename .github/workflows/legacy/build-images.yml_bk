@@ -36,3 +36,22 @@ jobs:
       push: ${{ github.ref == 'refs/heads/main' && github.event_name == 'push' }}
       cache-key: ${{ github.ref_name }}
     secrets: inherit
+
+  # Validation job (optional)
+  validate:
+    name: Validate images
+    needs: build-matrix
+    runs-on: ubuntu-latest
+    if: success()
+    steps:
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull and inspect images
+        run: |
+          docker pull ghcr.io/${{ github.repository }}/php-api:sha-${{ github.sha }}
+          docker inspect ghcr.io/${{ github.repository }}/php-api:sha-${{ github.sha }}

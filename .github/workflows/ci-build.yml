@@ -1,0 +1,37 @@
+name: CI - Build Images
+
+on:
+  workflow_run:
+    workflows: [Trigger Setup]
+    types: [completed]
+
+jobs:
+  # Load setup outputs
+  load-config:
+    name: Load Configuration
+    runs-on: ubuntu-latest
+    outputs:
+      environment: ${{ steps.config.outputs.environment }}
+      version-tag: ${{ steps.config.outputs.version-tag }}
+      should-build: ${{ steps.config.outputs.should-build }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Recalculate (hoặc lưu artifacts từ workflow trước)
+      # - id: config
+      #   run: |
+      #     echo "environment=production" >> $GITHUB_OUTPUT
+      #     echo "version-tag=v1.0.0" >> $GITHUB_OUTPUT
+      #     echo "should-build=true" >> $GITHUB_OUTPUT
+
+  # Call reusable build workflow
+  build:
+    name: Build
+    needs: load-config
+    if: needs.load-config.outputs.should-build == 'true'
+    uses: ./.github/workflows/_reusable/build.yml
+    with:
+      environment: ${{ needs.load-config.outputs.environment }}
+      version-tag: ${{ needs.load-config.outputs.version-tag }}
