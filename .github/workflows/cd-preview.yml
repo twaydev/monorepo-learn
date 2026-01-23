@@ -7,6 +7,7 @@ on:
 jobs:
   setup:
     name: Setup
+    if: github.event.action != 'closed'
     runs-on: ubuntu-latest
     outputs:
       version-tag: ${{ steps.version.outputs.version-tag }}
@@ -26,17 +27,38 @@ jobs:
           echo "version-tag=pr-${PR_NUM}-${COMMIT_SHA}" >> $GITHUB_OUTPUT
 
   build:
-    name: Build
+    name: Build ${{ matrix.image-name }}
     needs: setup
+    if: github.event.action != 'closed'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image-name: php-api
+            dockerfile: ./docker/Dockerfile.php-api
+          - image-name: go-api
+            dockerfile: ./docker/Dockerfile.go-api
+          - image-name: frontend
+            dockerfile: ./docker/Dockerfile.frontend
     uses: ./.github/workflows/_build.yml
+    permissions:
+      packages: write
     with:
       environment: preview
       version-tag: ${{ needs.setup.outputs.version-tag }}
       pr-number: ${{ needs.setup.outputs.pr-number }}
+      dockerfile: ${{ matrix.dockerfile }}
+      image-name: ${{ matrix.image-name }}
+      context: .
+      platforms: linux/amd64
+      push: true
+      cache-key: pr-${{ github.event.pull_request.number }}
+    secrets: inherit
 
   deploy:
     name: Deploy
     needs: [setup, build]
+    if: github.event.action != 'closed'
     uses: ./.github/workflows/_deploy.yml
     with:
       environment: preview
@@ -49,7 +71,7 @@ jobs:
   notify:
     name: Notify
     needs: [setup, deploy]
-    if: success()
+    if: github.event.action != 'closed' && success()
     uses: ./.github/workflows/_notify.yml
     with:
       environment: preview
