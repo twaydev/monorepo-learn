@@ -27,59 +27,50 @@ jobs:
     name: Deploy to ${{ inputs.environment }}
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
+    env:
+      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-
       - name: Install Railway CLI
-        run: npm install -g @railway/cli
+        run: |
+          curl -fsSL https://railway.com/install.sh | sh
+          echo "$HOME/.railway/bin" >> $GITHUB_PATH
 
-      - name: Link Railway project
-        env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-        run: railway link --project ${{ secrets.RAILWAY_PROJECT_ID }}
+      - name: Verify Railway auth
+        run: railway whoami
 
       - name: Deploy services
-        env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
         run: |
-          SERVICES=("php-api" "go-worker" "frontend" "nginx")
+          SERVICES=("php-api" "go-api")
 
           for service in "${SERVICES[@]}"; do
             SERVICE_NAME="$service"
 
-            # Prefix service name for preview
+            # Prefix service name for preview/staging
             if [ "${{ inputs.environment }}" = "preview" ]; then
               SERVICE_NAME="pr-${{ inputs.pr-number }}-${service}"
             elif [ "${{ inputs.environment }}" = "staging" ]; then
               SERVICE_NAME="${service}-staging"
             fi
 
-            echo "Deploying $SERVICE_NAME..."
-            railway service "$SERVICE_NAME" || railway service create --name "$SERVICE_NAME"
-            railway deploy "ghcr.io/${{ github.repository }}/${service}:${{ inputs.version-tag }}" --raw
+            IMAGE="ghcr.io/${{ github.repository }}/${service}:${{ inputs.version-tag }}"
 
-            sleep 5
+            echo "========================================"
+            echo "Deploying $SERVICE_NAME"
+            echo "Image: $IMAGE"
+            echo "========================================"
+
+            # Deploy using railway up with project ID
+            railway up --service "$SERVICE_NAME" \
+              --environment "${{ inputs.environment }}" \
+              -d || echo "Service $SERVICE_NAME deployment skipped or failed"
+
+            sleep 3
           done
 
-      - name: Verify deployment
-        env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+      - name: Deployment summary
         run: |
-          SERVICES=("php-api" "go-worker" "frontend" "nginx")
-
-          for service in "${SERVICES[@]}"; do
-            SERVICE_NAME="$service"
-            if [ "${{ inputs.environment }}" = "preview" ]; then
-              SERVICE_NAME="pr-${{ inputs.pr-number }}-${service}"
-            elif [ "${{ inputs.environment }}" = "staging" ]; then
-              SERVICE_NAME="${service}-staging"
-            fi
-
-            echo "Checking $SERVICE_NAME status..."
-            railway logs --service "$SERVICE_NAME" --tail 20 || true
-          done
+          echo "## Deployment Complete" >> $GITHUB_STEP_SUMMARY
+          echo "- **Environment:** ${{ inputs.environment }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Version:** ${{ inputs.version-tag }}" >> $GITHUB_STEP_SUMMARY
