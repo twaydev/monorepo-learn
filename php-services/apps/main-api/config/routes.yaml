@@ -11,3 +11,8 @@ health:
     path: /health
     controller: App\Controller\HealthController::health
     methods: [GET]
+
+index:
+    path: /
+    controller: App\Controller\IndexController::index
+    methods: [GET]
