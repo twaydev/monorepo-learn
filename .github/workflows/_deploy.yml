@@ -24,10 +24,6 @@ on:
     secrets:
       RAILWAY_TOKEN:
         required: true
-      RAILWAY_TEAM_TOKEN:
-        required: false
-      RAILWAY_PROJECT_ID:
-        required: false
 
 jobs:
   deploy:
@@ -35,10 +31,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
     env:
-      # Use team token if available, otherwise fall back to project token
-      RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_TEAM_TOKEN }}
       RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-      PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
     steps:
       - uses: actions/checkout@v4
 
@@ -50,13 +43,6 @@ jobs:
       - name: Install Railway CLI
         run: npm install -g @railway/cli
 
-      - name: Link to Railway project
-        if: env.RAILWAY_API_TOKEN != '' && env.PROJECT_ID != ''
-        run: |
-          echo "Authenticating with Railway Team Token..."
-          echo "Linking to Railway project: $PROJECT_ID"
-          railway link --project "$PROJECT_ID" --environment "${{ inputs.environment }}"
-
       - name: Deploy to Railway
         run: |
           echo "========================================"
@@ -65,36 +51,13 @@ jobs:
           echo "Service: ${{ inputs.service || 'default' }}"
           echo "========================================"
 
-          SERVICE="${{ inputs.service }}"
-          IMAGE="ghcr.io/${{ github.repository }}/${SERVICE}:${{ inputs.version-tag }}"
-
-          # Check if using team token (RAILWAY_API_TOKEN) or project token (RAILWAY_TOKEN)
-          if [ -n "$RAILWAY_API_TOKEN" ] && [ -n "$PROJECT_ID" ]; then
-            echo "Using Team Token with Project ID: $PROJECT_ID"
-
-            # Try to deploy
-            if ! railway up -d --service "$SERVICE" 2>&1 | tee /tmp/railway_output.txt; then
-              if grep -q "Service not found" /tmp/railway_output.txt; then
-                echo ""
-                echo "Service not found, creating service with Docker image..."
-                echo "Image: $IMAGE"
-                railway add --service "$SERVICE" --image "$IMAGE"
-                echo "Service created, deploying..."
-                railway up -d --service "$SERVICE"
-              else
-                echo "Deployment failed"
-                cat /tmp/railway_output.txt
-                exit 1
-              fi
-            fi
+          # Deploy using railway up with service flag if specified
+          # Note: Project tokens can only deploy to existing services
+          # Services must be created manually in Railway dashboard first
+          if [ -n "${{ inputs.service }}" ]; then
+            railway up -d --service "${{ inputs.service }}"
           else
-            echo "Using Project Token"
-            # Project tokens can only deploy to existing services
-            if [ -n "$SERVICE" ]; then
-              railway up -d --service "$SERVICE"
-            else
-              railway up -d
-            fi
+            railway up -d
           fi
 
       - name: Deployment summary
