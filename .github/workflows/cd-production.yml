@@ -6,6 +6,12 @@ on:
     branches: [main]
     types: [completed]
   workflow_dispatch:
+    inputs:
+      service:
+        description: "Service to deploy (leave empty for all)"
+        required: false
+        type: string
+        default: ""
 
 jobs:
   setup:
@@ -46,12 +52,19 @@ jobs:
           echo "version-tag=v${NEW_VERSION}" >> $GITHUB_OUTPUT
 
   deploy:
-    name: Deploy
+    name: Deploy ${{ matrix.service }}
     needs: setup
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - php-api
+          - go-api
     uses: ./.github/workflows/_deploy.yml
     with:
       environment: production
       version-tag: ${{ needs.setup.outputs.version-tag }}
+      service: ${{ matrix.service }}
     secrets:
       RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
 

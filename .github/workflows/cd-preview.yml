@@ -55,14 +55,21 @@ jobs:
     secrets: inherit
 
   deploy:
-    name: Deploy
+    name: Deploy ${{ matrix.service }}
     needs: [setup, build]
     if: github.event.action != 'closed'
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - php-api
+          - go-api
     uses: ./.github/workflows/_deploy.yml
     with:
       environment: preview
       version-tag: ${{ needs.setup.outputs.version-tag }}
       pr-number: ${{ needs.setup.outputs.pr-number }}
+      service: ${{ matrix.service }}
     secrets:
       RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
 
