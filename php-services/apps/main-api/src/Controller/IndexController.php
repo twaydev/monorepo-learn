@@ -11,7 +11,7 @@ class IndexController
     public function index(): JsonResponse
     {
         return new JsonResponse([
-            "message" => "Hello from PHP API Service 1",
+            "message" => "Hello from PHP API Service 2",
             "path" => $_SERVER["REQUEST_URI"],
         ]);
     }
