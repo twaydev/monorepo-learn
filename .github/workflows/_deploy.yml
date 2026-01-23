@@ -50,6 +50,19 @@ jobs:
       - name: Install Railway CLI
         run: npm install -g @railway/cli
 
+      - name: Setup Railway project context
+        if: env.RAILWAY_API_TOKEN != '' && env.PROJECT_ID != ''
+        run: |
+          # Create .railway directory with project config
+          mkdir -p .railway
+          cat > .railway/config.json << EOF
+          {
+            "project": "$PROJECT_ID",
+            "environment": "${{ inputs.environment }}"
+          }
+          EOF
+          echo "Railway project context configured"
+
       - name: Deploy to Railway
         run: |
           echo "========================================"

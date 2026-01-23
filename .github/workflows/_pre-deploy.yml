@@ -16,11 +16,15 @@ on:
         required: false
       RAILWAY_TEAM_TOKEN:
         required: true
+      RAILWAY_PROJECT_ID:
+        required: true
 
 jobs:
   check-service:
     name: Check/Create Service
     runs-on: ubuntu-latest
+    env:
+      RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_TEAM_TOKEN }}
     steps:
       - uses: actions/checkout@v4
 
@@ -32,15 +36,24 @@ jobs:
       - name: Install Railway CLI
         run: npm install -g @railway/cli
 
+      - name: Setup Railway project context
+        run: |
+          # Create .railway directory with project config
+          mkdir -p .railway
+          cat > .railway/config.json << EOF
+          {
+            "project": "${{ secrets.RAILWAY_PROJECT_ID }}",
+            "environment": "${{ inputs.environment }}"
+          }
+          EOF
+          echo "Railway project context configured"
+
       - name: Check if service exists
         id: check
-        env:
-          RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_TEAM_TOKEN }}
         run: |
           echo "Checking if service '${{ inputs.service }}' exists..."
 
           # List all services and check if our service exists
-          # Use railway status or service to check
           if railway service 2>&1 | grep -q "${{ inputs.service }}"; then
             echo "Service '${{ inputs.service }}' already exists"
             echo "exists=true" >> $GITHUB_OUTPUT
@@ -51,8 +64,6 @@ jobs:
 
       - name: Create service if missing
         if: steps.check.outputs.exists == 'false'
-        env:
-          RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_TEAM_TOKEN }}
         run: |
           echo "Creating service '${{ inputs.service }}'..."
 
