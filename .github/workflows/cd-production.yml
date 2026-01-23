@@ -51,27 +51,9 @@ jobs:
           NEW_VERSION="$MAJOR.$MINOR.$PATCH"
           echo "version-tag=v${NEW_VERSION}" >> $GITHUB_OUTPUT
 
-  pre-deploy:
-    name: Pre-Deploy ${{ matrix.service }}
-    needs: setup
-    strategy:
-      fail-fast: false
-      matrix:
-        service:
-          - php-api
-          - go-api
-    uses: ./.github/workflows/_pre-deploy.yml
-    with:
-      environment: production
-      service: ${{ matrix.service }}
-    secrets:
-      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-      RAILWAY_TEAM_TOKEN: ${{ secrets.RAILWAY_TEAM_TOKEN }}
-      RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
-
   deploy:
     name: Deploy ${{ matrix.service }}
-    needs: [setup, pre-deploy]
+    needs: setup
     strategy:
       fail-fast: false
       matrix:
@@ -90,7 +72,7 @@ jobs:
 
   notify:
     name: Notify
-    needs: [setup, pre-deploy, deploy]
+    needs: [setup, deploy]
     if: success()
     uses: ./.github/workflows/_notify.yml
     permissions:
