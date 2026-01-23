@@ -51,18 +51,11 @@ jobs:
           echo "Service: ${{ inputs.service || 'default' }}"
           echo "========================================"
 
-          SERVICE="${{ inputs.service }}"
-          IMAGE="ghcr.io/${{ github.repository }}/${SERVICE}:${{ inputs.version-tag }}"
-
-          if [ -n "$SERVICE" ]; then
-            # Try to deploy, if service not found, create it first
-            if ! railway up -d --service "$SERVICE" 2>&1; then
-              echo "Service not found, creating service with Docker image..."
-              echo "Image: $IMAGE"
-              railway add --service "$SERVICE" --image "$IMAGE"
-              echo "Service created, deploying..."
-              railway up -d --service "$SERVICE"
-            fi
+          # Deploy using railway up with service flag if specified
+          # Note: Project tokens can only deploy to existing services
+          # Services must be created manually in Railway dashboard first
+          if [ -n "${{ inputs.service }}" ]; then
+            railway up -d --service "${{ inputs.service }}"
           else
             railway up -d
           fi
