@@ -25,6 +25,10 @@ jobs:
   notify:
     name: Send Notifications
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
     steps:
       - name: Notify GitHub PR (Preview)
         if: inputs.event-type == 'pr-preview'
