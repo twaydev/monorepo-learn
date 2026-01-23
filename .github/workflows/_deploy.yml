@@ -17,7 +17,7 @@ on:
         type: string
         default: ""
     secrets:
-      RAILWAY_API_TOKEN:
+      RAILWAY_TOKEN:
         required: true
       RAILWAY_PROJECT_ID:
         required: true
@@ -40,12 +40,12 @@ jobs:
 
       - name: Link Railway project
         env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
         run: railway link --project ${{ secrets.RAILWAY_PROJECT_ID }}
 
       - name: Deploy services
         env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
         run: |
           SERVICES=("php-api" "go-worker" "frontend" "nginx")
 
@@ -68,7 +68,7 @@ jobs:
 
       - name: Verify deployment
         env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
         run: |
           SERVICES=("php-api" "go-worker" "frontend" "nginx")
 

@@ -65,7 +65,7 @@ jobs:
       version-tag: ${{ needs.setup.outputs.version-tag }}
       pr-number: ${{ needs.setup.outputs.pr-number }}
     secrets:
-      RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN_PREVIEW }}
+      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN_PREVIEW }}
       RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID_PREVIEW }}
 
   notify:
@@ -87,5 +87,5 @@ jobs:
     with:
       pr-number: ${{ github.event.pull_request.number }}
     secrets:
-      RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN_PREVIEW }}
+      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN_PREVIEW }}
       RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID_PREVIEW }}
