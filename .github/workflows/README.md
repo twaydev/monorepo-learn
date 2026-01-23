@@ -2,7 +2,7 @@
 
 ## Adding a New Service
 
-To add a new service to the CI/CD pipeline, simply edit the `build-matrix.yml` file:
+To add a new service to the CI/CD pipeline, simply edit the `.github/ci-matrix.yml` file:
 
 ### Example: Adding a new service
 

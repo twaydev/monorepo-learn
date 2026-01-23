@@ -50,7 +50,7 @@ jobs:
         id: changes
         run: |
           # Load service configuration from ci-matrix.yml
-          SERVICES_FILE=".github/workflows/ci-matrix.yml"
+          SERVICES_FILE=".github/ci-matrix.yml"
 
           if [ ! -f "$SERVICES_FILE" ]; then
             echo "Error: $SERVICES_FILE not found"
