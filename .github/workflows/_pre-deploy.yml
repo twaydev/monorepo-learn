@@ -1,0 +1,72 @@
+name: Pre-Deploy - Check/Create Railway Service (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      service:
+        description: "Railway service name to check/create"
+        required: true
+        type: string
+      environment:
+        description: "Target environment"
+        required: true
+        type: string
+    secrets:
+      RAILWAY_TOKEN:
+        required: true
+      RAILWAY_TEAM_TOKEN:
+        required: true
+
+jobs:
+  check-service:
+    name: Check/Create Service
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+
+      - name: Check if service exists
+        id: check
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |
+          echo "Checking if service '${{ inputs.service }}' exists..."
+          
+          # List all services and check if our service exists
+          if railway service list 2>&1 | grep -q "${{ inputs.service }}"; then
+            echo "Service '${{ inputs.service }}' already exists"
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "Service '${{ inputs.service }}' does not exist"
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create service if missing
+        if: steps.check.outputs.exists == 'false'
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TEAM_TOKEN }}
+        run: |
+          echo "Creating service '${{ inputs.service }}'..."
+          
+          # Create the service using team token
+          railway service create "${{ inputs.service }}"
+          
+          echo "Service '${{ inputs.service }}' created successfully"
+
+      - name: Summary
+        run: |
+          echo "## Pre-Deploy Check Complete" >> $GITHUB_STEP_SUMMARY
+          echo "- **Environment:** ${{ inputs.environment }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Service:** ${{ inputs.service }}" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ steps.check.outputs.exists }}" == "true" ]; then
+            echo "- **Status:** Service already exists ✓" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- **Status:** Service created ✓" >> $GITHUB_STEP_SUMMARY
+          fi
