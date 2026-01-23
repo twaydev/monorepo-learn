@@ -1,0 +1,12 @@
+services:
+  - image-name: php-api
+    dockerfile: ./docker/Dockerfile.php-api
+    context: .
+    platforms: linux/amd64
+    source-path: php-services
+
+  - image-name: go-api
+    dockerfile: ./docker/Dockerfile.go-api
+    context: .
+    platforms: linux/amd64
+    source-path: go-services

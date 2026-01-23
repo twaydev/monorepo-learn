@@ -13,8 +13,8 @@ jobs:
     outputs:
       environment: ${{ steps.config.outputs.environment }}
       version-tag: ${{ steps.config.outputs.version-tag }}
-      should-build: ${{ steps.config.outputs.should-build }}
       branch: ${{ steps.config.outputs.branch }}
+      matrix: ${{ steps.changes.outputs.matrix }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -41,28 +41,83 @@ jobs:
             echo "version-tag=dev-${COMMIT_SHA}" >> $GITHUB_OUTPUT
           fi
 
-          echo "should-build=true" >> $GITHUB_OUTPUT
+      - name: Install yq
+        run: |
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+
+      - name: Detect code changes and ci matrix
+        id: changes
+        run: |
+          # Load service configuration from ci-matrix.yml
+          SERVICES_FILE=".github/workflows/ci-matrix.yml"
+
+          if [ ! -f "$SERVICES_FILE" ]; then
+            echo "Error: $SERVICES_FILE not found"
+            exit 1
+          fi
+
+          # Get the list of changed files
+          if [ "${{ github.event.workflow_run.event }}" = "pull_request" ]; then
+            BASE_SHA="${{ github.event.workflow_run.pull_requests[0].base.sha }}"
+            HEAD_SHA="${{ github.event.workflow_run.head_sha }}"
+          else
+            # For push events, compare with previous commit
+            BASE_SHA="${{ github.event.workflow_run.head_sha }}~1"
+            HEAD_SHA="${{ github.event.workflow_run.head_sha }}"
+          fi
+
+          echo "Comparing ${BASE_SHA}...${HEAD_SHA}"
+          CHANGED_FILES=$(git diff --name-only ${BASE_SHA} ${HEAD_SHA} || echo "")
+
+          echo "Changed files:"
+          echo "$CHANGED_FILES"
+          echo ""
+
+          # Filter services that need rebuilding
+          FILTERED_SERVICES="[]"
+
+          # Convert YAML to JSON and iterate
+          for row in $(yq eval '.services[] | @base64' "$SERVICES_FILE"); do
+            _yq() {
+              echo ${row} | base64 --decode | yq eval ${1} -
+            }
+
+            SERVICE_NAME=$(_yq '.["image-name"]')
+            SOURCE_PATH=$(_yq '.["source-path"]')
+            DOCKERFILE=$(_yq '.dockerfile')
+
+            # Build regex pattern: source path + dockerfile + shared-schemas
+            PATTERN="^(${SOURCE_PATH}/|${DOCKERFILE}|shared-schemas/)"
+
+            if echo "$CHANGED_FILES" | grep -qE "$PATTERN"; then
+              echo "✓ ${SERVICE_NAME} needs rebuild (changes detected)"
+              # Convert YAML service to JSON and add to filtered list
+              SERVICE_JSON=$(echo ${row} | base64 --decode | yq eval -o=json -)
+              FILTERED_SERVICES=$(echo "$FILTERED_SERVICES" | jq --argjson item "$SERVICE_JSON" '. += [$item]')
+            else
+              echo "○ ${SERVICE_NAME} unchanged"
+            fi
+          done
+
+          # Output the filtered matrix
+          if [ "$(echo "$FILTERED_SERVICES" | jq 'length')" -eq 0 ]; then
+            echo "matrix={\"include\":[]}" >> $GITHUB_OUTPUT
+            echo "No services need rebuilding"
+          else
+            MATRIX_JSON=$(echo "$FILTERED_SERVICES" | jq -c '{include: .}')
+            echo "matrix=${MATRIX_JSON}" >> $GITHUB_OUTPUT
+            echo "Services to build:"
+            echo "$FILTERED_SERVICES" | jq -r '.[] | .["image-name"]'
+          fi
 
   build-images:
     name: Build ${{ matrix.image-name }}
     needs: load-config
-    if: needs.load-config.outputs.should-build == 'true'
+    if: fromJSON(needs.load-config.outputs.matrix).include[0] != null
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - image-name: php-api
-            dockerfile: ./docker/Dockerfile.php-api
-            context: .
-            platforms: linux/amd64
-          - image-name: go-api
-            dockerfile: ./docker/Dockerfile.go-api
-            context: .
-            platforms: linux/amd64
-          # - image-name: frontend
-          #   dockerfile: ./docker/Dockerfile.frontend
-          #   context: .
-          #   platforms: linux/amd64
+      matrix: ${{ fromJSON(needs.load-config.outputs.matrix) }}
     uses: ./.github/workflows/_build.yml
     permissions:
       packages: write
