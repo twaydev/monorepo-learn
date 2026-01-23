@@ -2,7 +2,7 @@ name: PR - Preview Environment
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened]
+    types: [opened, synchronize, reopened, closed]
 
 jobs:
   setup:
@@ -61,12 +61,9 @@ jobs:
   cleanup-on-close:
     name: Cleanup (PR Closed)
     if: github.event.action == 'closed'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Cleanup resources
-        uses: ./.github/workflows/_reusable/cleanup.yml
-        with:
-          pr-number: ${{ github.event.pull_request.number }}
-        secrets:
-          RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN_PREVIEW }}
-          RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID_PREVIEW }}
+    uses: ./.github/workflows/_reusable/cleanup.yml
+    with:
+      pr-number: ${{ github.event.pull_request.number }}
+    secrets:
+      RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN_PREVIEW }}
+      RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID_PREVIEW }}

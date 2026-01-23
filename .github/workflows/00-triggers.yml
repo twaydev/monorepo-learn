@@ -1,0 +1,93 @@
+name: Trigger Setup
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'services/**'
+      - 'docker/**'
+      - '.github/workflows/**'
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'services/**'
+      - 'docker/**'
+
+jobs:
+  setup:
+    name: Setup Build Configuration
+    runs-on: ubuntu-latest
+    outputs:
+      environment: ${{ steps.config.outputs.environment }}
+      version-tag: ${{ steps.config.outputs.version-tag }}
+      should-build: ${{ steps.changes.outputs.should-build }}
+      changed-services: ${{ steps.changes.outputs.changed-services }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect changes
+        id: changes
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE_SHA=${{ github.event.pull_request.base.sha }}
+          else
+            BASE_SHA=${{ github.event.before }}
+          fi
+
+          CHANGED_FILES=$(git diff --name-only $BASE_SHA ${{ github.sha }} 2>/dev/null || echo "")
+
+          CHANGED_SERVICES=""
+          if echo "$CHANGED_FILES" | grep -q "services/php-services/\|docker/Dockerfile.php"; then
+            CHANGED_SERVICES="${CHANGED_SERVICES}php-api,"
+          fi
+          if echo "$CHANGED_FILES" | grep -q "services/go-services/\|docker/Dockerfile.go"; then
+            CHANGED_SERVICES="${CHANGED_SERVICES}go-worker,"
+          fi
+          if echo "$CHANGED_FILES" | grep -q "services/rust-services/\|docker/Dockerfile.rust"; then
+            CHANGED_SERVICES="${CHANGED_SERVICES}rust-api,"
+          fi
+          if echo "$CHANGED_FILES" | grep -q "services/frontend/\|docker/Dockerfile.frontend"; then
+            CHANGED_SERVICES="${CHANGED_SERVICES}frontend,"
+          fi
+
+          CHANGED_SERVICES="${CHANGED_SERVICES%,}"
+
+          if [ -n "$CHANGED_SERVICES" ]; then
+            echo "should-build=true" >> $GITHUB_OUTPUT
+            echo "changed-services=$CHANGED_SERVICES" >> $GITHUB_OUTPUT
+          else
+            echo "should-build=false" >> $GITHUB_OUTPUT
+            echo "changed-services=" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Determine environment
+        id: config
+        run: |
+          if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            echo "environment=production" >> $GITHUB_OUTPUT
+
+            LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+            echo "version-tag=${LATEST_TAG}" >> $GITHUB_OUTPUT
+
+          elif [ "${{ github.ref }}" = "refs/heads/develop" ]; then
+            echo "environment=staging" >> $GITHUB_OUTPUT
+
+            BUILD_NUM=$(git rev-list --count HEAD)
+            echo "version-tag=v1.0.0-staging.${BUILD_NUM}" >> $GITHUB_OUTPUT
+
+          else
+            echo "environment=preview" >> $GITHUB_OUTPUT
+
+            COMMIT_SHA=$(git rev-parse --short HEAD)
+            echo "version-tag=dev-${COMMIT_SHA}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Summary
+        run: |
+          echo "## Build Configuration" >> $GITHUB_STEP_SUMMARY
+          echo "- **Environment:** ${{ steps.config.outputs.environment }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Version Tag:** ${{ steps.config.outputs.version-tag }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Should Build:** ${{ steps.changes.outputs.should-build }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Changed Services:** ${{ steps.changes.outputs.changed-services }}" >> $GITHUB_STEP_SUMMARY

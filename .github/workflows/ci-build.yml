@@ -6,48 +6,73 @@ on:
     types: [completed]
 
 jobs:
-  # Load setup outputs
   load-config:
     name: Load Configuration
     runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     outputs:
       environment: ${{ steps.config.outputs.environment }}
       version-tag: ${{ steps.config.outputs.version-tag }}
       should-build: ${{ steps.config.outputs.should-build }}
+      branch: ${{ steps.config.outputs.branch }}
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.workflow_run.head_sha }}
           fetch-depth: 0
 
-      # Recalculate (hoặc lưu artifacts từ workflow trước)
-      # - id: config
-      #   run: |
-      #     echo "environment=production" >> $GITHUB_OUTPUT
-      #     echo "version-tag=v1.0.0" >> $GITHUB_OUTPUT
-      #     echo "should-build=true" >> $GITHUB_OUTPUT
+      - name: Determine configuration
+        id: config
+        run: |
+          REF="${{ github.event.workflow_run.head_branch }}"
+          echo "branch=${REF}" >> $GITHUB_OUTPUT
 
-  # Build matrix strategy for multiple services
-  build-matrix:
+          if [ "$REF" = "main" ]; then
+            echo "environment=production" >> $GITHUB_OUTPUT
+            LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+            echo "version-tag=${LATEST_TAG}" >> $GITHUB_OUTPUT
+          elif [ "$REF" = "develop" ]; then
+            echo "environment=staging" >> $GITHUB_OUTPUT
+            BUILD_NUM=$(git rev-list --count HEAD)
+            echo "version-tag=v1.0.0-staging.${BUILD_NUM}" >> $GITHUB_OUTPUT
+          else
+            echo "environment=preview" >> $GITHUB_OUTPUT
+            COMMIT_SHA=$(git rev-parse --short HEAD)
+            echo "version-tag=dev-${COMMIT_SHA}" >> $GITHUB_OUTPUT
+          fi
+
+          echo "should-build=true" >> $GITHUB_OUTPUT
+
+  build-images:
     name: Build ${{ matrix.image-name }}
     needs: load-config
     if: needs.load-config.outputs.should-build == 'true'
-    uses: ./.github/workflows/_reusable/build.yml
-    permissions:
-      packages: write
     strategy:
+      fail-fast: false
       matrix:
         include:
           - image-name: php-api
             dockerfile: ./docker/Dockerfile.php-api
             context: .
             platforms: linux/amd64
+          - image-name: go-api
+            dockerfile: ./docker/Dockerfile.go-api
+            context: .
+            platforms: linux/amd64
+          - image-name: frontend
+            dockerfile: ./docker/Dockerfile.frontend
+            context: .
+            platforms: linux/amd64
+    uses: ./.github/workflows/_reusable/build.yml
+    permissions:
+      packages: write
     with:
       dockerfile: ${{ matrix.dockerfile }}
       image-name: ${{ matrix.image-name }}
       context: ${{ matrix.context }}
       platforms: ${{ matrix.platforms }}
-      push: ${{ github.ref == 'refs/heads/main' && github.event_name == 'push' }}
-      cache-key: ${{ github.ref_name }}
+      push: ${{ needs.load-config.outputs.branch == 'main' || needs.load-config.outputs.branch == 'develop' }}
+      cache-key: ${{ needs.load-config.outputs.branch }}
       environment: ${{ needs.load-config.outputs.environment }}
       version-tag: ${{ needs.load-config.outputs.version-tag }}
     secrets: inherit
