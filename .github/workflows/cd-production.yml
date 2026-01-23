@@ -85,6 +85,8 @@ jobs:
     needs: [setup, deploy]
     if: success()
     uses: ./.github/workflows/_notify.yml
+    permissions:
+      contents: write
     with:
       environment: production
       version-tag: ${{ needs.setup.outputs.version-tag }}
