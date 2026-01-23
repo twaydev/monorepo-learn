@@ -26,12 +26,28 @@ jobs:
       #     echo "version-tag=v1.0.0" >> $GITHUB_OUTPUT
       #     echo "should-build=true" >> $GITHUB_OUTPUT
 
-  # Call reusable build workflow
-  build:
-    name: Build
+  # Build matrix strategy for multiple services
+  build-matrix:
+    name: Build ${{ matrix.image-name }}
     needs: load-config
     if: needs.load-config.outputs.should-build == 'true'
     uses: ./.github/workflows/_reusable/build.yml
+    permissions:
+      packages: write
+    strategy:
+      matrix:
+        include:
+          - image-name: php-api
+            dockerfile: ./docker/Dockerfile.php-api
+            context: .
+            platforms: linux/amd64
     with:
+      dockerfile: ${{ matrix.dockerfile }}
+      image-name: ${{ matrix.image-name }}
+      context: ${{ matrix.context }}
+      platforms: ${{ matrix.platforms }}
+      push: ${{ github.ref == 'refs/heads/main' && github.event_name == 'push' }}
+      cache-key: ${{ github.ref_name }}
       environment: ${{ needs.load-config.outputs.environment }}
       version-tag: ${{ needs.load-config.outputs.version-tag }}
+    secrets: inherit

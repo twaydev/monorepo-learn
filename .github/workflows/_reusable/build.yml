@@ -16,6 +16,31 @@ on:
         required: false
         type: string
         default: ""
+
+      dockerfile:
+        description: "Path to Dockerfile"
+        required: true
+        type: string
+      image-name:
+        description: "Docker image name (without registry/tag)"
+        required: true
+        type: string
+      context:
+        description: "Docker build context path"
+        required: false
+        type: string
+        default: "."
+      platforms:
+        description: "Target platforms (e.g., linux/amd64,linux/arm64)"
+        required: false
+        type: string
+        default: "linux/amd64"
+      push:
+        description: "Push image to registry"
+        required: false
+        type: boolean
+        default: false
+
     outputs:
       build-status:
         description: "Build status"
@@ -23,31 +48,9 @@ on:
 
 jobs:
   build:
-    name: Build Images
     runs-on: ubuntu-latest
     permissions:
-      contents: read
       packages: write
-    outputs:
-      status: ${{ steps.build-result.outputs.status }}
-    strategy:
-      matrix:
-        include:
-          - image-name: php-api
-            dockerfile: ./docker/Dockerfile.php-api
-            context: ./services/php-api
-
-          - image-name: go-worker
-            dockerfile: ./docker/Dockerfile.go-worker
-            context: ./services/go-worker
-
-          - image-name: frontend
-            dockerfile: ./docker/Dockerfile.frontend
-            context: ./services/frontend
-
-          - image-name: nginx
-            dockerfile: ./docker/Dockerfile.nginx
-            context: ./nginx
     steps:
       - uses: actions/checkout@v4
 
@@ -65,7 +68,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/${{ github.repository }}/${{ matrix.image-name }}
+          images: ghcr.io/${{ github.repository }}/${{ input.image-name }}
           tags: |
             type=raw,value=${{ inputs.version-tag }}
             type=raw,value=${{ inputs.environment }}-latest
@@ -73,13 +76,13 @@ jobs:
       - name: Build and push
         uses: docker/build-push-action@v5
         with:
-          context: ${{ matrix.context }}
-          file: ${{ matrix.dockerfile }}
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
+          context: ${{ inputs.context }}
+          file: ${{ inputs.dockerfile }}
+          platforms: ${{ inputs.platforms }}
+          push: ${{ inputs.push }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha,scope=${{ matrix.image-name }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.image-name }}
+          cache-from: type=gha,scope=${{ inputs.image-name }}-${{ inputs.cache-key }}
+          cache-to: type=gha,mode=max,scope=${{ inputs.image-name }}-${{ inputs.cache-key }}
 
       - name: Set build status
         id: build-result
