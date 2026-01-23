@@ -9,15 +9,15 @@ on:
     secrets:
       RAILWAY_TOKEN:
         required: true
-      RAILWAY_PROJECT_ID:
-        required: true
 
 jobs:
   cleanup:
     name: Cleanup PR Resources
     runs-on: ubuntu-latest
+    env:
+      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
     steps:
-      - name: Set up Node.js
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: "20"
@@ -25,20 +25,11 @@ jobs:
       - name: Install Railway CLI
         run: npm install -g @railway/cli
 
-      - name: Delete preview services
-        env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+      - name: Cleanup notification
         run: |
-          railway link ${{ secrets.RAILWAY_PROJECT_ID }}
-
-          PR_NUM=${{ inputs.pr-number }}
-          SERVICES=("php-api" "go-worker" "frontend" "nginx")
-
-          for service in "${SERVICES[@]}"; do
-            SERVICE_NAME="pr-${PR_NUM}-${service}"
-            echo "Deleting $SERVICE_NAME..."
-            railway service "$SERVICE_NAME"
-            railway service delete "$SERVICE_NAME" --force || true
-          done
-
-          echo "✅ Cleanup completed for PR #${PR_NUM}"
+          echo "========================================"
+          echo "PR #${{ inputs.pr-number }} closed"
+          echo "Preview environment cleanup requested"
+          echo "========================================"
+          echo "Note: Manual cleanup may be required in Railway dashboard"
+          echo "      Project tokens have limited permissions for service deletion"

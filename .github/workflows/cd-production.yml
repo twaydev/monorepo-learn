@@ -54,7 +54,6 @@ jobs:
       version-tag: ${{ needs.setup.outputs.version-tag }}
     secrets:
       RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-      RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
 
   notify:
     name: Notify

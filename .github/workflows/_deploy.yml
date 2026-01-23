@@ -20,7 +20,7 @@ on:
       RAILWAY_TOKEN:
         required: true
       RAILWAY_PROJECT_ID:
-        required: true
+        required: false
 
 jobs:
   deploy:
@@ -40,37 +40,15 @@ jobs:
       - name: Install Railway CLI
         run: npm install -g @railway/cli
 
-      - name: Verify Railway auth
-        run: railway whoami || echo "Auth check failed - token may be invalid"
-
-      - name: Deploy services
+      - name: Deploy to Railway
         run: |
-          SERVICES=("php-api" "go-api")
+          echo "========================================"
+          echo "Deploying to ${{ inputs.environment }}"
+          echo "Version: ${{ inputs.version-tag }}"
+          echo "========================================"
 
-          for service in "${SERVICES[@]}"; do
-            SERVICE_NAME="$service"
-
-            # Prefix service name for preview/staging
-            if [ "${{ inputs.environment }}" = "preview" ]; then
-              SERVICE_NAME="pr-${{ inputs.pr-number }}-${service}"
-            elif [ "${{ inputs.environment }}" = "staging" ]; then
-              SERVICE_NAME="${service}-staging"
-            fi
-
-            IMAGE="ghcr.io/${{ github.repository }}/${service}:${{ inputs.version-tag }}"
-
-            echo "========================================"
-            echo "Deploying $SERVICE_NAME"
-            echo "Image: $IMAGE"
-            echo "========================================"
-
-            # Deploy using railway up with project ID
-            railway up --service "$SERVICE_NAME" \
-              --environment "${{ inputs.environment }}" \
-              -d || echo "Service $SERVICE_NAME deployment skipped or failed"
-
-            sleep 3
-          done
+          # Deploy using railway up (project token already set via RAILWAY_TOKEN)
+          railway up -d
 
       - name: Deployment summary
         run: |
