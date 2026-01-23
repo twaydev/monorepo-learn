@@ -1,10 +1,10 @@
-name: Pre-Deploy - Check/Create Railway Service (Reusable)
+name: Pre-Deploy - Verify Railway Service (Reusable)
 
 on:
   workflow_call:
     inputs:
       service:
-        description: "Railway service name to check/create"
+        description: "Railway service name to verify"
         required: true
         type: string
       environment:
@@ -12,17 +12,15 @@ on:
         required: true
         type: string
     secrets:
-      RAILWAY_API_TOKEN:
-        required: true
-      RAILWAY_PROJECT_ID:
+      RAILWAY_TOKEN:
         required: true
 
 jobs:
-  check-service:
-    name: Check/Create Service
+  verify-service:
+    name: Verify Service
     runs-on: ubuntu-latest
     env:
-      RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
+      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
     steps:
       - uses: actions/checkout@v4
 
@@ -34,65 +32,27 @@ jobs:
       - name: Install Railway CLI
         run: npm install -g @railway/cli
 
-      - name: Debug - Verify token
+      - name: Verify Railway connection
         run: |
           echo "Checking Railway CLI version..."
           railway --version
           echo ""
-          echo "Verifying token is set..."
-          if [ -z "$RAILWAY_API_TOKEN" ]; then
-            echo "ERROR: RAILWAY_API_TOKEN is not set!"
+          echo "Verifying project token is set..."
+          if [ -z "$RAILWAY_TOKEN" ]; then
+            echo "ERROR: RAILWAY_TOKEN is not set!"
             exit 1
           fi
-          echo "RAILWAY_API_TOKEN is set (length: ${#RAILWAY_API_TOKEN})"
+          echo "RAILWAY_TOKEN is set (length: ${#RAILWAY_TOKEN})"
           echo ""
-          echo "Testing token with whoami..."
-          railway whoami || echo "whoami failed - this might be expected for some token types"
-
-      - name: Link to Railway project
-        run: |
-          echo "Linking to Railway project..."
-          echo "Project ID: ${{ secrets.RAILWAY_PROJECT_ID }}"
-          railway link --project ${{ secrets.RAILWAY_PROJECT_ID }}
-
-      - name: Check if service exists
-        id: check
-        run: |
-          echo "Checking if service '${{ inputs.service }}' exists..."
-
-          # List all services and check if our service exists
-          SERVICE_LIST=$(railway service list 2>&1 || echo "")
-          echo "Services found:"
-          echo "$SERVICE_LIST"
-
-          if echo "$SERVICE_LIST" | grep -q "${{ inputs.service }}"; then
-            echo "Service '${{ inputs.service }}' already exists"
-            echo "exists=true" >> $GITHUB_OUTPUT
-          else
-            echo "Service '${{ inputs.service }}' does not exist"
-            echo "exists=false" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Create service if missing
-        if: steps.check.outputs.exists == 'false'
-        run: |
-          echo "Creating service '${{ inputs.service }}'..."
-
-          # Create the service using team token with railway add
-          # Using --image to create a Docker-based service
-          IMAGE="ghcr.io/${{ github.repository }}/${{ inputs.service }}:${{ inputs.environment }}-latest"
-          echo "Using image: $IMAGE"
-          railway add --service "${{ inputs.service }}" --image "$IMAGE"
-
-          echo "Service '${{ inputs.service }}' created successfully"
+          echo "Note: Project tokens are scoped to a specific project/environment"
+          echo "Service to deploy: ${{ inputs.service }}"
 
       - name: Summary
         run: |
-          echo "## Pre-Deploy Check Complete" >> $GITHUB_STEP_SUMMARY
+          echo "## Pre-Deploy Verification Complete" >> $GITHUB_STEP_SUMMARY
           echo "- **Environment:** ${{ inputs.environment }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Service:** ${{ inputs.service }}" >> $GITHUB_STEP_SUMMARY
-          if [ "${{ steps.check.outputs.exists }}" == "true" ]; then
-            echo "- **Status:** Service already exists ✓" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "- **Status:** Service created ✓" >> $GITHUB_STEP_SUMMARY
-          fi
+          echo "- **Status:** Ready for deployment ✓" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Note: Services must be created in Railway dashboard first." >> $GITHUB_STEP_SUMMARY
+          echo "Project tokens can only deploy to existing services." >> $GITHUB_STEP_SUMMARY
