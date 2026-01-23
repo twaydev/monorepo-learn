@@ -63,7 +63,7 @@ jobs:
             dockerfile: ./docker/Dockerfile.frontend
             context: .
             platforms: linux/amd64
-    uses: ./.github/workflows/_reusable/build.yml
+    uses: ./.github/workflows/_build.yml
     permissions:
       packages: write
     with:

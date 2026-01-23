@@ -44,7 +44,7 @@ jobs:
   build:
     name: Build
     needs: setup
-    uses: ./.github/workflows/_reusable/build.yml
+    uses: ./.github/workflows/_build.yml
     with:
       environment: production
       version-tag: ${{ needs.setup.outputs.version-tag }}
@@ -52,7 +52,7 @@ jobs:
   deploy:
     name: Deploy
     needs: [setup, build]
-    uses: ./.github/workflows/_reusable/deploy.yml
+    uses: ./.github/workflows/_deploy.yml
     with:
       environment: production
       version-tag: ${{ needs.setup.outputs.version-tag }}
@@ -64,7 +64,7 @@ jobs:
     name: Notify
     needs: [setup, deploy]
     if: success()
-    uses: ./.github/workflows/_reusable/notify.yml
+    uses: ./.github/workflows/_notify.yml
     with:
       environment: production
       version-tag: ${{ needs.setup.outputs.version-tag }}
