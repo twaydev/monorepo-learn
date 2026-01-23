@@ -13,7 +13,7 @@ on:
         type: string
     secrets:
       RAILWAY_TOKEN:
-        required: true
+        required: false
       RAILWAY_TEAM_TOKEN:
         required: true
 
@@ -35,12 +35,13 @@ jobs:
       - name: Check if service exists
         id: check
         env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_TEAM_TOKEN }}
         run: |
           echo "Checking if service '${{ inputs.service }}' exists..."
-          
+
           # List all services and check if our service exists
-          if railway service list 2>&1 | grep -q "${{ inputs.service }}"; then
+          # Use railway status or service to check
+          if railway service 2>&1 | grep -q "${{ inputs.service }}"; then
             echo "Service '${{ inputs.service }}' already exists"
             echo "exists=true" >> $GITHUB_OUTPUT
           else
@@ -51,13 +52,15 @@ jobs:
       - name: Create service if missing
         if: steps.check.outputs.exists == 'false'
         env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TEAM_TOKEN }}
+          RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_TEAM_TOKEN }}
         run: |
           echo "Creating service '${{ inputs.service }}'..."
-          
-          # Create the service using team token
-          railway service create "${{ inputs.service }}"
-          
+
+          # Create the service using team token with railway add
+          # Using --image to create a Docker-based service
+          IMAGE="ghcr.io/${{ github.repository }}/${{ inputs.service }}:latest"
+          railway add --service "${{ inputs.service }}" --image "$IMAGE"
+
           echo "Service '${{ inputs.service }}' created successfully"
 
       - name: Summary
