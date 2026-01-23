@@ -59,10 +59,10 @@ jobs:
             dockerfile: ./docker/Dockerfile.go-api
             context: .
             platforms: linux/amd64
-          - image-name: frontend
-            dockerfile: ./docker/Dockerfile.frontend
-            context: .
-            platforms: linux/amd64
+          # - image-name: frontend
+          #   dockerfile: ./docker/Dockerfile.frontend
+          #   context: .
+          #   platforms: linux/amd64
     uses: ./.github/workflows/_build.yml
     permissions:
       packages: write

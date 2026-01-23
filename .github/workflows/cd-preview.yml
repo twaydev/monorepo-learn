@@ -38,8 +38,8 @@ jobs:
             dockerfile: ./docker/Dockerfile.php-api
           - image-name: go-api
             dockerfile: ./docker/Dockerfile.go-api
-          - image-name: frontend
-            dockerfile: ./docker/Dockerfile.frontend
+          # - image-name: frontend
+          # dockerfile: ./docker/Dockerfile.frontend
     uses: ./.github/workflows/_build.yml
     permissions:
       packages: write
