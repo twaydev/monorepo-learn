@@ -50,19 +50,6 @@ jobs:
       - name: Install Railway CLI
         run: npm install -g @railway/cli
 
-      - name: Setup Railway project context
-        if: env.RAILWAY_API_TOKEN != '' && env.PROJECT_ID != ''
-        run: |
-          # Create .railway directory with project config
-          mkdir -p .railway
-          cat > .railway/config.json << EOF
-          {
-            "project": "$PROJECT_ID",
-            "environment": "${{ inputs.environment }}"
-          }
-          EOF
-          echo "Railway project context configured"
-
       - name: Deploy to Railway
         run: |
           echo "========================================"
@@ -76,17 +63,17 @@ jobs:
 
           # Check if using team token (RAILWAY_API_TOKEN) or project token (RAILWAY_TOKEN)
           if [ -n "$RAILWAY_API_TOKEN" ] && [ -n "$PROJECT_ID" ]; then
-            echo "Using Team Token with Project ID"
+            echo "Using Team Token with Project ID: $PROJECT_ID"
 
-            # Try to deploy, if service not found, create it first
-            if ! railway up -d --service "$SERVICE" 2>&1 | tee /tmp/railway_output.txt; then
+            # Try to deploy with --project flag
+            if ! railway up -d --project "$PROJECT_ID" --service "$SERVICE" 2>&1 | tee /tmp/railway_output.txt; then
               if grep -q "Service not found" /tmp/railway_output.txt; then
                 echo ""
                 echo "Service not found, creating service with Docker image..."
                 echo "Image: $IMAGE"
-                railway add --service "$SERVICE" --image "$IMAGE"
+                railway add --project "$PROJECT_ID" --service "$SERVICE" --image "$IMAGE"
                 echo "Service created, deploying..."
-                railway up -d --service "$SERVICE"
+                railway up -d --project "$PROJECT_ID" --service "$SERVICE"
               else
                 echo "Deployment failed"
                 cat /tmp/railway_output.txt

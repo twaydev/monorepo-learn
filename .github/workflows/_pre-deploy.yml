@@ -36,25 +36,19 @@ jobs:
       - name: Install Railway CLI
         run: npm install -g @railway/cli
 
-      - name: Setup Railway project context
-        run: |
-          # Create .railway directory with project config
-          mkdir -p .railway
-          cat > .railway/config.json << EOF
-          {
-            "project": "${{ secrets.RAILWAY_PROJECT_ID }}",
-            "environment": "${{ inputs.environment }}"
-          }
-          EOF
-          echo "Railway project context configured"
-
       - name: Check if service exists
         id: check
+        env:
+          PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
         run: |
-          echo "Checking if service '${{ inputs.service }}' exists..."
+          echo "Checking if service '${{ inputs.service }}' exists in project..."
+          echo "Project ID: $PROJECT_ID"
 
-          # List all services and check if our service exists
-          if railway service 2>&1 | grep -q "${{ inputs.service }}"; then
+          # List services in the project using --project flag
+          SERVICES=$(railway service --project "$PROJECT_ID" 2>&1 || echo "")
+          echo "Services found: $SERVICES"
+
+          if echo "$SERVICES" | grep -q "${{ inputs.service }}"; then
             echo "Service '${{ inputs.service }}' already exists"
             echo "exists=true" >> $GITHUB_OUTPUT
           else
@@ -64,13 +58,15 @@ jobs:
 
       - name: Create service if missing
         if: steps.check.outputs.exists == 'false'
+        env:
+          PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
         run: |
           echo "Creating service '${{ inputs.service }}'..."
 
           # Create the service using team token with railway add
           # Using --image to create a Docker-based service
           IMAGE="ghcr.io/${{ github.repository }}/${{ inputs.service }}:latest"
-          railway add --service "${{ inputs.service }}" --image "$IMAGE"
+          railway add --project "$PROJECT_ID" --service "${{ inputs.service }}" --image "$IMAGE"
 
           echo "Service '${{ inputs.service }}' created successfully"
 
