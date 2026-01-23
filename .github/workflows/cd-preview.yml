@@ -26,6 +26,7 @@ jobs:
           COMMIT_SHA=$(git rev-parse --short HEAD)
           echo "version-tag=pr-${PR_NUM}-${COMMIT_SHA}" >> $GITHUB_OUTPUT
 
+  # PR previews need their own builds with PR-specific tags
   build:
     name: Build ${{ matrix.image-name }}
     needs: setup
@@ -38,8 +39,6 @@ jobs:
             dockerfile: ./docker/Dockerfile.php-api
           - image-name: go-api
             dockerfile: ./docker/Dockerfile.go-api
-          # - image-name: frontend
-          # dockerfile: ./docker/Dockerfile.frontend
     uses: ./.github/workflows/_build.yml
     permissions:
       packages: write
@@ -65,14 +64,17 @@ jobs:
       version-tag: ${{ needs.setup.outputs.version-tag }}
       pr-number: ${{ needs.setup.outputs.pr-number }}
     secrets:
-      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN_PREVIEW }}
-      RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID_PREVIEW }}
+      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+      RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
 
   notify:
     name: Notify
     needs: [setup, deploy]
     if: github.event.action != 'closed' && success()
     uses: ./.github/workflows/_notify.yml
+    permissions:
+      contents: write
+      pull-requests: write
     with:
       environment: preview
       version-tag: ${{ needs.setup.outputs.version-tag }}
@@ -87,5 +89,5 @@ jobs:
     with:
       pr-number: ${{ github.event.pull_request.number }}
     secrets:
-      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN_PREVIEW }}
-      RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID_PREVIEW }}
+      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+      RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}

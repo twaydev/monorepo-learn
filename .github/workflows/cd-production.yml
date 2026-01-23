@@ -1,14 +1,17 @@
 name: CD - Deploy Production
 
 on:
-  push:
+  workflow_run:
+    workflows: ["CI - Build Images"]
     branches: [main]
+    types: [completed]
   workflow_dispatch:
 
 jobs:
   setup:
     name: Setup
     runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     outputs:
       version-tag: ${{ steps.version.outputs.version-tag }}
     steps:
@@ -42,36 +45,9 @@ jobs:
           NEW_VERSION="$MAJOR.$MINOR.$PATCH"
           echo "version-tag=v${NEW_VERSION}" >> $GITHUB_OUTPUT
 
-  build:
-    name: Build ${{ matrix.image-name }}
-    needs: setup
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - image-name: php-api
-            dockerfile: ./docker/Dockerfile.php-api
-          - image-name: go-api
-            dockerfile: ./docker/Dockerfile.go-api
-          # - image-name: frontend
-          # dockerfile: ./docker/Dockerfile.frontend
-    uses: ./.github/workflows/_build.yml
-    permissions:
-      packages: write
-    with:
-      environment: production
-      version-tag: ${{ needs.setup.outputs.version-tag }}
-      dockerfile: ${{ matrix.dockerfile }}
-      image-name: ${{ matrix.image-name }}
-      context: .
-      platforms: linux/amd64
-      push: true
-      cache-key: main
-    secrets: inherit
-
   deploy:
     name: Deploy
-    needs: [setup, build]
+    needs: setup
     uses: ./.github/workflows/_deploy.yml
     with:
       environment: production

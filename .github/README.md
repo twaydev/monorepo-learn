@@ -9,19 +9,27 @@ This directory contains GitHub Actions workflows for the monorepo CI/CD pipeline
 │  Trigger Setup  │────▶│   CI - Build    │────▶│   CD - Deploy   │
 │ (00-triggers)   │     │   (ci-build)    │     │ (cd-*)          │
 └─────────────────┘     └─────────────────┘     └─────────────────┘
+        │                       │                       │
+   Change detection        Build images           Deploy only
+   & configuration         (matrix)              (no build)
 ```
 
 ## Workflows
 
-### Main Workflows
+### CI Workflows (Build)
 
 | Workflow | Trigger | Description |
 |----------|---------|-------------|
 | `00-triggers.yml` | Push to main/develop | Detects changes and sets build configuration |
 | `ci-build.yml` | workflow_run (Trigger Setup) | Builds Docker images using matrix strategy |
-| `cd-production.yml` | Push to main | Build and deploy to production |
-| `cd-staging.yml` | Push to develop | Build and deploy to staging |
-| `cd-preview.yml` | Pull Request | Build and deploy PR preview environment |
+
+### CD Workflows (Deploy)
+
+| Workflow | Trigger | Description |
+|----------|---------|-------------|
+| `cd-production.yml` | After CI succeeds on main | Deploy to production (no build) |
+| `cd-staging.yml` | After CI succeeds on develop | Deploy to staging (no build) |
+| `cd-preview.yml` | Pull Request | Build + deploy PR preview (has own build) |
 
 ### Reusable Workflows
 
@@ -32,21 +40,21 @@ This directory contains GitHub Actions workflows for the monorepo CI/CD pipeline
 | `_notify.yml` | GitHub notifications (PR comments, releases) |
 | `_cleanup.yml` | PR preview environment cleanup |
 
-## Build Matrix
+## Build Matrix (CI only)
 
-All CD workflows build the following images in parallel:
+CI workflow builds the following images in parallel:
 
 | Image | Dockerfile |
 |-------|------------|
 | `php-api` | `./docker/Dockerfile.php-api` |
 | `go-api` | `./docker/Dockerfile.go-api` |
-| `frontend` | `./docker/Dockerfile.frontend` |
 
 ## Environment Flow
 
 ```
 Feature Branch ──▶ PR Preview ──▶ develop ──▶ Staging ──▶ main ──▶ Production
-                   (auto-cleanup)            (auto)              (auto)
+                   (build+deploy)  (CI build)  (deploy)   (CI build) (deploy)
+                   (auto-cleanup)
 ```
 
 ## Versioning
@@ -64,14 +72,10 @@ Production versioning follows conventional commits:
 
 ## Required Secrets
 
-| Secret | Environment | Description |
-|--------|-------------|-------------|
-| `RAILWAY_API_TOKEN` | Production | Railway API token |
-| `RAILWAY_PROJECT_ID` | Production | Railway project ID |
-| `RAILWAY_API_TOKEN_STAGING` | Staging | Railway API token |
-| `RAILWAY_PROJECT_ID_STAGING` | Staging | Railway project ID |
-| `RAILWAY_API_TOKEN_PREVIEW` | Preview | Railway API token |
-| `RAILWAY_PROJECT_ID_PREVIEW` | Preview | Railway project ID |
+| Secret | Description |
+|--------|-------------|
+| `RAILWAY_TOKEN` | Railway API token |
+| `RAILWAY_PROJECT_ID` | Railway project ID |
 
 ## CODEOWNERS
 
@@ -80,10 +84,10 @@ Team ownership is defined in `CODEOWNERS`:
 | Path | Team |
 |------|------|
 | `.github/workflows/` | @twaydev/devops-team |
-| `/services/php-services/` | @twaydev/php-team |
-| `/services/go-services/` | @twaydev/go-team |
-| `/services/rust-services/` | @twaydev/rust-team |
-| `/services/frontend/` | @twaydev/frontend-team |
+| `/php-services/` | @twaydev/php-team |
+| `/go-services/` | @twaydev/go-team |
+| `/rust-services/` | @twaydev/rust-team |
+| `/frontend/` | @twaydev/frontend-team |
 | `/docs/`, `README.md` | @twaydev/tech-lead |
 
 ## Directory Structure
@@ -95,9 +99,9 @@ Team ownership is defined in `CODEOWNERS`:
 └── workflows/
     ├── 00-triggers.yml     # Trigger setup & change detection
     ├── ci-build.yml        # CI build (matrix)
-    ├── cd-production.yml   # Production deployment
-    ├── cd-staging.yml      # Staging deployment
-    ├── cd-preview.yml      # PR preview deployment
+    ├── cd-production.yml   # Production deployment (deploy only)
+    ├── cd-staging.yml      # Staging deployment (deploy only)
+    ├── cd-preview.yml      # PR preview (build + deploy)
     ├── _build.yml          # Reusable: Docker build
     ├── _deploy.yml         # Reusable: Railway deploy
     ├── _notify.yml         # Reusable: Notifications

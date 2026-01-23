@@ -1,13 +1,17 @@
 name: CD - Deploy Staging
 
 on:
-  push:
+  workflow_run:
+    workflows: ["CI - Build Images"]
     branches: [develop]
+    types: [completed]
+  workflow_dispatch:
 
 jobs:
   setup:
     name: Setup
     runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     outputs:
       version-tag: ${{ steps.version.outputs.version-tag }}
     steps:
@@ -21,49 +25,24 @@ jobs:
           BUILD_NUM=$(git rev-list --count HEAD)
           echo "version-tag=v1.0.0-staging.${BUILD_NUM}" >> $GITHUB_OUTPUT
 
-  build:
-    name: Build ${{ matrix.image-name }}
-    needs: setup
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - image-name: php-api
-            dockerfile: ./docker/Dockerfile.php-api
-          - image-name: go-api
-            dockerfile: ./docker/Dockerfile.go-api
-          # - image-name: frontend
-          #   dockerfile: ./docker/Dockerfile.frontend
-    uses: ./.github/workflows/_build.yml
-    permissions:
-      packages: write
-    with:
-      environment: staging
-      version-tag: ${{ needs.setup.outputs.version-tag }}
-      dockerfile: ${{ matrix.dockerfile }}
-      image-name: ${{ matrix.image-name }}
-      context: .
-      platforms: linux/amd64
-      push: true
-      cache-key: develop
-    secrets: inherit
-
   deploy:
     name: Deploy
-    needs: [setup, build]
+    needs: setup
     uses: ./.github/workflows/_deploy.yml
     with:
       environment: staging
       version-tag: ${{ needs.setup.outputs.version-tag }}
     secrets:
-      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN_STAGING }}
-      RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID_STAGING }}
+      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+      RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
 
   notify:
     name: Notify
     needs: [setup, deploy]
     if: success()
     uses: ./.github/workflows/_notify.yml
+    permissions:
+      contents: write
     with:
       environment: staging
       version-tag: ${{ needs.setup.outputs.version-tag }}
