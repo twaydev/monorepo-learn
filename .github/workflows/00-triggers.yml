@@ -4,14 +4,24 @@ on:
   push:
     branches: [main, develop]
     paths:
-      - 'services/**'
-      - 'docker/**'
-      - '.github/workflows/**'
+      - "go-services/**"
+      - "rust-services/**"
+      - "php-services/**"
+      - "frontend/**"
+      - "docker/**"
+      - "shared-schemas/**"
+      - ".github/ci-matrix.yml"
+      - ".github/workflows/**"
   pull_request:
     branches: [main, develop]
     paths:
-      - 'services/**'
-      - 'docker/**'
+      - "go-services/**"
+      - "rust-services/**"
+      - "php-services/**"
+      - "frontend/**"
+      - "docker/**"
+      - "shared-schemas/**"
+      - ".github/ci-matrix.yml"
 
 jobs:
   setup:
@@ -38,18 +48,29 @@ jobs:
 
           CHANGED_FILES=$(git diff --name-only $BASE_SHA ${{ github.sha }} 2>/dev/null || echo "")
 
+          echo "Changed files:"
+          echo "$CHANGED_FILES"
+
           CHANGED_SERVICES=""
-          if echo "$CHANGED_FILES" | grep -q "services/php-services/\|docker/Dockerfile.php"; then
+          # php-api: php-services/ or docker/Dockerfile.php-api
+          if echo "$CHANGED_FILES" | grep -qE "^php-services/|^docker/Dockerfile\.php-api"; then
             CHANGED_SERVICES="${CHANGED_SERVICES}php-api,"
           fi
-          if echo "$CHANGED_FILES" | grep -q "services/go-services/\|docker/Dockerfile.go"; then
-            CHANGED_SERVICES="${CHANGED_SERVICES}go-worker,"
+          # go-api: go-services/ or docker/Dockerfile.go-api
+          if echo "$CHANGED_FILES" | grep -qE "^go-services/|^docker/Dockerfile\.go-api"; then
+            CHANGED_SERVICES="${CHANGED_SERVICES}go-api,"
           fi
-          if echo "$CHANGED_FILES" | grep -q "services/rust-services/\|docker/Dockerfile.rust"; then
+          # rust-api: rust-services/ or docker/Dockerfile.rust-api
+          if echo "$CHANGED_FILES" | grep -qE "^rust-services/|^docker/Dockerfile\.rust-api"; then
             CHANGED_SERVICES="${CHANGED_SERVICES}rust-api,"
           fi
-          if echo "$CHANGED_FILES" | grep -q "services/frontend/\|docker/Dockerfile.frontend"; then
+          # frontend: frontend/ or docker/Dockerfile.frontend
+          if echo "$CHANGED_FILES" | grep -qE "^frontend/|^docker/Dockerfile\.frontend"; then
             CHANGED_SERVICES="${CHANGED_SERVICES}frontend,"
+          fi
+          # shared-schemas affects all services
+          if echo "$CHANGED_FILES" | grep -qE "^shared-schemas/"; then
+            CHANGED_SERVICES="php-api,go-api,rust-api,frontend,"
           fi
 
           CHANGED_SERVICES="${CHANGED_SERVICES%,}"
@@ -57,9 +78,11 @@ jobs:
           if [ -n "$CHANGED_SERVICES" ]; then
             echo "should-build=true" >> $GITHUB_OUTPUT
             echo "changed-services=$CHANGED_SERVICES" >> $GITHUB_OUTPUT
+            echo "Services to build: $CHANGED_SERVICES"
           else
             echo "should-build=false" >> $GITHUB_OUTPUT
             echo "changed-services=" >> $GITHUB_OUTPUT
+            echo "No service changes detected"
           fi
 
       - name: Determine environment

@@ -77,23 +77,26 @@ jobs:
           # Filter services that need rebuilding
           FILTERED_SERVICES="[]"
 
-          # Convert YAML to JSON and iterate
-          for row in $(yq eval '.services[] | @base64' "$SERVICES_FILE"); do
-            _yq() {
-              echo ${row} | base64 --decode | yq eval ${1} -
+          # Convert YAML to JSON first
+          SERVICES_JSON=$(yq eval -o=json "$SERVICES_FILE")
+          
+          # Iterate through services
+          for row in $(echo "$SERVICES_JSON" | jq -r '.services[] | @base64'); do
+            _jq() {
+              echo ${row} | base64 --decode | jq -r ${1}
             }
 
-            SERVICE_NAME=$(_yq '.["image-name"]')
-            SOURCE_PATH=$(_yq '.["source-path"]')
-            DOCKERFILE=$(_yq '.dockerfile')
+            SERVICE_NAME=$(_jq '.["image-name"]')
+            SOURCE_PATH=$(_jq '.["source-path"]')
+            DOCKERFILE=$(_jq '.dockerfile')
 
             # Build regex pattern: source path + dockerfile + shared-schemas
             PATTERN="^(${SOURCE_PATH}/|${DOCKERFILE}|shared-schemas/)"
 
             if echo "$CHANGED_FILES" | grep -qE "$PATTERN"; then
               echo "✓ ${SERVICE_NAME} needs rebuild (changes detected)"
-              # Convert YAML service to JSON and add to filtered list
-              SERVICE_JSON=$(echo ${row} | base64 --decode | yq eval -o=json -)
+              # Add service to filtered list
+              SERVICE_JSON=$(echo ${row} | base64 --decode)
               FILTERED_SERVICES=$(echo "$FILTERED_SERVICES" | jq --argjson item "$SERVICE_JSON" '. += [$item]')
             else
               echo "○ ${SERVICE_NAME} unchanged"
