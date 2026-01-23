@@ -34,9 +34,25 @@ jobs:
       - name: Install Railway CLI
         run: npm install -g @railway/cli
 
+      - name: Debug - Verify token
+        run: |
+          echo "Checking Railway CLI version..."
+          railway --version
+          echo ""
+          echo "Verifying token is set..."
+          if [ -z "$RAILWAY_API_TOKEN" ]; then
+            echo "ERROR: RAILWAY_API_TOKEN is not set!"
+            exit 1
+          fi
+          echo "RAILWAY_API_TOKEN is set (length: ${#RAILWAY_API_TOKEN})"
+          echo ""
+          echo "Testing token with whoami..."
+          railway whoami || echo "whoami failed - this might be expected for some token types"
+
       - name: Link to Railway project
         run: |
           echo "Linking to Railway project..."
+          echo "Project ID: ${{ secrets.RAILWAY_PROJECT_ID }}"
           railway link --project ${{ secrets.RAILWAY_PROJECT_ID }}
 
       - name: Check if service exists
