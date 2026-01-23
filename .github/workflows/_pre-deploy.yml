@@ -36,16 +36,21 @@ jobs:
       - name: Install Railway CLI
         run: npm install -g @railway/cli
 
-      - name: Check if service exists
-        id: check
+      - name: Link to Railway project
         env:
           PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
         run: |
-          echo "Checking if service '${{ inputs.service }}' exists in project..."
-          echo "Project ID: $PROJECT_ID"
+          echo "Linking to Railway project: $PROJECT_ID"
+          # Link to the project non-interactively
+          railway link --project "$PROJECT_ID" --environment "${{ inputs.environment }}" || true
 
-          # List services in the project using --project flag
-          SERVICES=$(railway service --project "$PROJECT_ID" 2>&1 || echo "")
+      - name: Check if service exists
+        id: check
+        run: |
+          echo "Checking if service '${{ inputs.service }}' exists..."
+
+          # List services and check
+          SERVICES=$(railway service 2>&1 || echo "")
           echo "Services found: $SERVICES"
 
           if echo "$SERVICES" | grep -q "${{ inputs.service }}"; then
@@ -58,15 +63,12 @@ jobs:
 
       - name: Create service if missing
         if: steps.check.outputs.exists == 'false'
-        env:
-          PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
         run: |
           echo "Creating service '${{ inputs.service }}'..."
 
-          # Create the service using team token with railway add
-          # Using --image to create a Docker-based service
+          # Create the service using railway add
           IMAGE="ghcr.io/${{ github.repository }}/${{ inputs.service }}:latest"
-          railway add --project "$PROJECT_ID" --service "${{ inputs.service }}" --image "$IMAGE"
+          railway add --service "${{ inputs.service }}" --image "$IMAGE"
 
           echo "Service '${{ inputs.service }}' created successfully"
 
