@@ -7,7 +7,7 @@ on:
         required: true
         type: string
     secrets:
-      RAILWAY_TOKEN:
+      RAILWAY_API_TOKEN:
         required: true
 
 jobs:
@@ -15,7 +15,7 @@ jobs:
     name: Cleanup PR Resources
     runs-on: ubuntu-latest
     env:
-      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+      RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
     steps:
       - name: Setup Node.js
         uses: actions/setup-node@v4

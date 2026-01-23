@@ -45,7 +45,7 @@ jobs:
       environment: staging
       service: ${{ matrix.service }}
     secrets:
-      RAILWAY_TEAM_TOKEN: ${{ secrets.RAILWAY_TEAM_TOKEN }}
+      RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
       RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
 
   deploy:
@@ -63,7 +63,8 @@ jobs:
       version-tag: ${{ needs.setup.outputs.version-tag }}
       service: ${{ matrix.service }}
     secrets:
-      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+      RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
+      RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
 
   notify:
     name: Notify
