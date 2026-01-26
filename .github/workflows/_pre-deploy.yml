@@ -1,10 +1,10 @@
-name: Pre-Deploy - Verify Railway Service (Reusable)
+name: Pre-Deploy - Check/Create Railway Service (Reusable)
 
 on:
   workflow_call:
     inputs:
       service:
-        description: "Railway service name to verify"
+        description: "Railway service name to check/create"
         required: true
         type: string
       environment:
@@ -12,15 +12,17 @@ on:
         required: true
         type: string
     secrets:
-      RAILWAY_TOKEN:
+      RAILWAY_API_TOKEN:
+        required: true
+      RAILWAY_PROJECT_ID:
         required: true
 
 jobs:
-  verify-service:
-    name: Verify Service
+  check-service:
+    name: Check/Create Service
     runs-on: ubuntu-latest
     env:
-      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+      RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
     steps:
       - uses: actions/checkout@v4
 
@@ -29,30 +31,54 @@ jobs:
         with:
           node-version: "20"
 
-      - name: Install Railway CLI
-        run: npm install -g @railway/cli
-
-      - name: Verify Railway connection
+      - name: Check if service exists
+        id: check
         run: |
-          echo "Checking Railway CLI version..."
-          railway --version
-          echo ""
-          echo "Verifying project token is set..."
-          if [ -z "$RAILWAY_TOKEN" ]; then
-            echo "ERROR: RAILWAY_TOKEN is not set!"
+          echo "Checking if service '${{ inputs.service }}' exists..."
+
+          # Use Railway GraphQL API to check services (team tokens can't use CLI link)
+          RESPONSE=$(curl -s -X POST https://backboard.railway.app/graphql/v2 \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer $RAILWAY_API_TOKEN" \
+            -d "{\"query\": \"query { project(id: \\\"${{ secrets.RAILWAY_PROJECT_ID }}\\\") { services { edges { node { name } } } } }\"}")
+
+          echo "API Response: $RESPONSE"
+
+          if echo "$RESPONSE" | grep -q "\"name\":\"${{ inputs.service }}\""; then
+            echo "Service '${{ inputs.service }}' already exists"
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "Service '${{ inputs.service }}' does not exist"
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create service if missing
+        if: steps.check.outputs.exists == 'false'
+        run: |
+          echo "Creating service '${{ inputs.service }}'..."
+
+          # Create service using Railway GraphQL API
+          RESPONSE=$(curl -s -X POST https://backboard.railway.app/graphql/v2 \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer $RAILWAY_API_TOKEN" \
+            -d "{\"query\": \"mutation { serviceCreate(input: { projectId: \\\"${{ secrets.RAILWAY_PROJECT_ID }}\\\", name: \\\"${{ inputs.service }}\\\" }) { id name } }\"}")
+
+          echo "API Response: $RESPONSE"
+
+          if echo "$RESPONSE" | grep -q '"errors"'; then
+            echo "Failed to create service!"
             exit 1
           fi
-          echo "RAILWAY_TOKEN is set (length: ${#RAILWAY_TOKEN})"
-          echo ""
-          echo "Note: Project tokens are scoped to a specific project/environment"
-          echo "Service to deploy: ${{ inputs.service }}"
+
+          echo "Service '${{ inputs.service }}' created successfully"
 
       - name: Summary
         run: |
-          echo "## Pre-Deploy Verification Complete" >> $GITHUB_STEP_SUMMARY
+          echo "## Pre-Deploy Check Complete" >> $GITHUB_STEP_SUMMARY
           echo "- **Environment:** ${{ inputs.environment }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Service:** ${{ inputs.service }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Status:** Ready for deployment ✓" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Note: Services must be created in Railway dashboard first." >> $GITHUB_STEP_SUMMARY
-          echo "Project tokens can only deploy to existing services." >> $GITHUB_STEP_SUMMARY
+          if [ "${{ steps.check.outputs.exists }}" == "true" ]; then
+            echo "- **Status:** Service already exists ✓" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- **Status:** Service created ✓" >> $GITHUB_STEP_SUMMARY
+          fi
