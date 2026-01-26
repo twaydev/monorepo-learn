@@ -39,7 +39,7 @@ jobs:
       - name: Build matrix from changed services
         id: matrix
         run: |
-          SERVICES_FILE=".github/ci-matrix.yml"
+          SERVICES_FILE=".github/service-matrix.yml"
           CHANGED_SERVICES="${{ inputs.changed-services }}"
 
           if [ ! -f "$SERVICES_FILE" ]; then
@@ -77,14 +77,14 @@ jobs:
             # Trim whitespace
             SERVICE_NAME=$(echo "$SERVICE_NAME" | xargs)
 
-            # Find matching service in ci-matrix.yml
+            # Find matching service in service-matrix.yml
             SERVICE_JSON=$(echo "$SERVICES_JSON" | jq -c --arg name "$SERVICE_NAME" '.services[] | select(.["image-name"] == $name)')
 
             if [ -n "$SERVICE_JSON" ]; then
               echo "✓ Adding ${SERVICE_NAME} to build matrix"
               FILTERED_SERVICES=$(echo "$FILTERED_SERVICES" | jq --argjson item "$SERVICE_JSON" '. += [$item]')
             else
-              echo "⚠ Service ${SERVICE_NAME} not found in ci-matrix.yml"
+              echo "⚠ Service ${SERVICE_NAME} not found in service-matrix.yml"
             fi
           done
 
@@ -98,6 +98,38 @@ jobs:
             echo "has-services=true" >> $GITHUB_OUTPUT
             echo "Services to build:"
             echo "$FILTERED_SERVICES" | jq -r '.[] | .["image-name"]'
+          fi
+
+      - name: Summary
+        run: |
+          echo "## Build Matrix Configuration" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Inputs" >> $GITHUB_STEP_SUMMARY
+          echo "| Parameter | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Environment | \`${{ inputs.environment }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Version Tag | \`${{ inputs.version-tag }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Branch | \`${{ inputs.branch }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Changed Services | \`${{ inputs.changed-services }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Build Matrix" >> $GITHUB_STEP_SUMMARY
+          echo "| Service | Dockerfile | Platform |" >> $GITHUB_STEP_SUMMARY
+          echo "|---------|------------|----------|" >> $GITHUB_STEP_SUMMARY
+
+          MATRIX='${{ steps.matrix.outputs.matrix }}'
+          if [ "${{ steps.matrix.outputs.has-services }}" = "true" ]; then
+            echo "$MATRIX" | jq -r '.include[] | "| \(.["image-name"]) | \(.dockerfile) | \(.platforms) |"' >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| _No services to build_ | - | - |" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Status" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ steps.matrix.outputs.has-services }}" = "true" ]; then
+            SERVICE_COUNT=$(echo "$MATRIX" | jq '.include | length')
+            echo "✅ **${SERVICE_COUNT} service(s)** will be built" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⏭️ **No services** to build - skipping build job" >> $GITHUB_STEP_SUMMARY
           fi
 
   build-images:

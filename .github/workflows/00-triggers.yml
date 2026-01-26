@@ -5,19 +5,16 @@ on:
     branches: [main, develop]
     paths:
       - "go-services/**"
-      # - "rust-services/**"
       - "php-services/**"
-      # - "frontend/**"
       - "docker/**"
       - ".github/workflows/**"
   pull_request:
     branches: [main, develop]
     paths:
       - "go-services/**"
-      # - "rust-services/**"
       - "php-services/**"
-      # - "frontend/**"
       - "docker/**"
+      - ".github/workflows/**"
   workflow_dispatch:
     inputs:
       build_all:
@@ -39,6 +36,11 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Install yq
+        run: |
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/download/v4.40.5/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
 
       - name: Detect changes
         id: changes
@@ -78,24 +80,41 @@ jobs:
           echo "$CHANGED_FILES"
           echo ""
 
+          # Load services from service-matrix.yml and detect changes dynamically
+          SERVICES_FILE=".github/service-matrix.yml"
+          if [ ! -f "$SERVICES_FILE" ]; then
+            echo "Error: $SERVICES_FILE not found"
+            exit 1
+          fi
+
+          SERVICES_JSON=$(yq eval -o=json "$SERVICES_FILE")
           CHANGED_SERVICES=""
-          if echo "$CHANGED_FILES" | grep -qE "^php-services/|^docker/Dockerfile\.php-api"; then
-            CHANGED_SERVICES="${CHANGED_SERVICES}php-api,"
-          fi
-          if echo "$CHANGED_FILES" | grep -qE "^go-services/|^docker/Dockerfile\.go-api"; then
-            CHANGED_SERVICES="${CHANGED_SERVICES}go-api,"
-          fi
-          # Uncomment when ready:
-          # if echo "$CHANGED_FILES" | grep -qE "^rust-services/|^docker/Dockerfile\.rust-api"; then
-          #   CHANGED_SERVICES="${CHANGED_SERVICES}rust-api,"
-          # fi
-          # if echo "$CHANGED_FILES" | grep -qE "^frontend/|^docker/Dockerfile\.frontend"; then
-          #   CHANGED_SERVICES="${CHANGED_SERVICES}frontend,"
-          # fi
+
+          # Iterate through services and check for changes
+          for row in $(echo "$SERVICES_JSON" | jq -r '.services[] | @base64'); do
+            _jq() {
+              echo ${row} | base64 --decode | jq -r ${1}
+            }
+
+            SERVICE_NAME=$(_jq '.["image-name"]')
+            SOURCE_PATH=$(_jq '.["source-path"]')
+            DOCKERFILE=$(_jq '.dockerfile')
+
+            # Build regex pattern: source path + dockerfile
+            PATTERN="^(${SOURCE_PATH}/|${DOCKERFILE})"
+
+            if echo "$CHANGED_FILES" | grep -qE "$PATTERN"; then
+              echo "✓ ${SERVICE_NAME} needs rebuild (changes in ${SOURCE_PATH} or ${DOCKERFILE})"
+              CHANGED_SERVICES="${CHANGED_SERVICES}${SERVICE_NAME},"
+            else
+              echo "○ ${SERVICE_NAME} unchanged"
+            fi
+          done
 
           # Remove trailing comma
           CHANGED_SERVICES="${CHANGED_SERVICES%,}"
 
+          echo ""
           echo "Changed services: $CHANGED_SERVICES"
           echo "changed-services=$CHANGED_SERVICES" >> $GITHUB_OUTPUT
 
