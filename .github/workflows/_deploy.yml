@@ -46,6 +46,7 @@ jobs:
         run: npm install -g @railway/cli
 
       - name: Deploy to Railway
+        id: deploy
         run: |
           echo "========================================"
           echo "Deploying to ${{ inputs.environment }}"
@@ -54,12 +55,38 @@ jobs:
           echo "Project: ${{ secrets.RAILWAY_PROJECT_ID }}"
           echo "========================================"
 
-          # Deploy using railway up with --project and --environment flags
+          # Deploy using railway up with --ci flag (streams logs and waits for completion)
           # Team tokens can't use 'railway link', so we pass project directly
-          railway up -d \
+          railway up --ci \
             --project "${{ secrets.RAILWAY_PROJECT_ID }}" \
             --environment "${{ inputs.environment }}" \
             --service "${{ inputs.service }}"
+
+      - name: Verify deployment status
+        run: |
+          echo "Verifying deployment status..."
+
+          # Get the latest deployment for this service
+          RESPONSE=$(curl -s -X POST https://backboard.railway.app/graphql/v2 \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer $RAILWAY_API_TOKEN" \
+            -d "{\"query\": \"query { project(id: \\\"${{ secrets.RAILWAY_PROJECT_ID }}\\\") { services { edges { node { name deployments(first: 1) { edges { node { status } } } } } } } }\"}")
+
+          echo "API Response: $RESPONSE"
+
+          # Check if deployment succeeded
+          STATUS=$(echo "$RESPONSE" | grep -o '"name":"${{ inputs.service }}"[^}]*"status":"[^"]*"' | grep -o '"status":"[^"]*"' | cut -d'"' -f4)
+
+          echo "Deployment status for ${{ inputs.service }}: $STATUS"
+
+          if [ "$STATUS" = "SUCCESS" ]; then
+            echo "✅ Deployment successful!"
+          elif [ "$STATUS" = "FAILED" ]; then
+            echo "❌ Deployment failed!"
+            exit 1
+          else
+            echo "⚠️ Deployment status: $STATUS"
+          fi
 
       - name: Deployment summary
         run: |
