@@ -6,12 +6,12 @@ This directory contains GitHub Actions workflows for the monorepo CI/CD pipeline
 
 ```
 ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│  Trigger Setup  │────▶│   CI - Build    │────▶│   CD - Deploy   │
+│   CI Pipeline   │────▶│  Build docker   │────▶│   CD - Deploy   │
 │ (00-triggers)   │     │   (ci-build)    │     │ (cd-*)          │
 └─────────────────┘     └─────────────────┘     └─────────────────┘
         │                       │                       │
    Change detection        Build images           Deploy only
-   & configuration         (matrix)              (no build)
+   & configuration      (reusable workflow)      (no build)
 ```
 
 ## Workflows
@@ -20,8 +20,8 @@ This directory contains GitHub Actions workflows for the monorepo CI/CD pipeline
 
 | Workflow | Trigger | Description |
 |----------|---------|-------------|
-| `00-triggers.yml` | Push to main/develop | Detects changes and sets build configuration |
-| `ci-build.yml` | workflow_run (Trigger Setup) | Builds Docker images using matrix strategy |
+| `00-triggers.yml` | Push/PR to main/develop, workflow_dispatch | Detects changes, sets config, calls ci-build |
+| `ci-build.yml` | workflow_call (from 00-triggers) | Builds Docker images using matrix strategy |
 
 ### CD Workflows (Deploy)
 
@@ -40,14 +40,39 @@ This directory contains GitHub Actions workflows for the monorepo CI/CD pipeline
 | `_notify.yml` | GitHub notifications (PR comments, releases) |
 | `_cleanup.yml` | PR preview environment cleanup |
 
-## Build Matrix (CI only)
+## Service Matrix
 
-CI workflow builds the following images in parallel:
+Services are defined in `service-matrix.yml`. The CI pipeline dynamically detects changes based on this configuration.
 
-| Image | Dockerfile |
-|-------|------------|
-| `php-api` | `./docker/Dockerfile.php-api` |
-| `go-api` | `./docker/Dockerfile.go-api` |
+```yaml
+# .github/service-matrix.yml
+services:
+  - image-name: php-api
+    dockerfile: ./docker/Dockerfile.php-api
+    context: .
+    platforms: linux/amd64
+    source-path: php-services
+
+  - image-name: go-api
+    dockerfile: ./docker/Dockerfile.go-api
+    context: .
+    platforms: linux/amd64
+    source-path: go-services
+```
+
+**To add a new service:** Simply add an entry to `service-matrix.yml` - no workflow changes needed.
+
+## Job Display Names
+
+The CI pipeline displays jobs as:
+
+```
+CI Pipeline
+└── Build Images
+    └── Build docker
+        ├── php-api
+        └── go-api
+```
 
 ## Environment Flow
 
@@ -69,6 +94,26 @@ Production versioning follows conventional commits:
 - `BREAKING CHANGE` → Major bump
 - `feat:` → Minor bump
 - `fix:` → Patch bump
+
+## GitHub Actions Summary
+
+Each workflow step generates a summary visible in the Actions UI:
+
+### Setup Job Summary
+- Environment (production/staging/preview)
+- Version tag
+- Branch name
+- Changed services
+
+### Build Matrix Summary
+- Input parameters
+- Services to build (table)
+- Build status
+
+### Build Job Summary (per image)
+- Configuration (image name, dockerfile, platform, etc.)
+- Generated image tags
+- Build result with digest
 
 ## Required Secrets
 
@@ -96,11 +141,12 @@ Team ownership is defined in `CODEOWNERS`:
 .github/
 ├── CODEOWNERS              # Team ownership rules
 ├── README.md               # This file
+├── service-matrix.yml      # Service definitions for CI
 └── workflows/
-    ├── 00-triggers.yml     # Trigger setup & change detection
-    ├── ci-build.yml        # CI build (matrix)
-    ├── cd-production.yml   # Production deployment (deploy only)
-    ├── cd-staging.yml      # Staging deployment (deploy only)
+    ├── 00-triggers.yml     # CI entry point & change detection
+    ├── ci-build.yml        # CI build (reusable, matrix)
+    ├── cd-production.yml   # Production deployment
+    ├── cd-staging.yml      # Staging deployment
     ├── cd-preview.yml      # PR preview (build + deploy)
     ├── _build.yml          # Reusable: Docker build
     ├── _deploy.yml         # Reusable: Railway deploy
