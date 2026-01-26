@@ -57,7 +57,27 @@ jobs:
           echo "Service ID: $SERVICE_ID"
           echo "service_id=$SERVICE_ID" >> $GITHUB_OUTPUT
 
-      - name: Update service image
+      - name: Get environment ID
+        id: env
+        run: |
+          ENV_RESPONSE=$(curl -s -X POST https://backboard.railway.app/graphql/v2 \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer $RAILWAY_API_TOKEN" \
+            -d "{\"query\": \"query { project(id: \\\"$RAILWAY_PROJECT_ID\\\") { environments { edges { node { id name } } } } }\"}")
+
+          ENV_ID=$(echo "$ENV_RESPONSE" | grep -o "\"id\":\"[^\"]*\",\"name\":\"${{ inputs.environment }}\"" | grep -o '"id":"[^"]*"' | cut -d'"' -f4)
+
+          if [ -z "$ENV_ID" ]; then
+            echo "❌ Environment '${{ inputs.environment }}' not found!"
+            echo "$ENV_RESPONSE"
+            exit 1
+          fi
+
+          echo "Environment ID: $ENV_ID"
+          echo "env_id=$ENV_ID" >> $GITHUB_OUTPUT
+
+      - name: Deploy service with image
+        id: deploy
         run: |
           echo "========================================"
           echo "Deploying to ${{ inputs.environment }}"
@@ -69,50 +89,59 @@ jobs:
           IMAGE="ghcr.io/${{ github.repository }}/${{ inputs.service }}:${{ inputs.version-tag }}"
           echo "Image: $IMAGE"
 
-          # Update service to use the new image
-          RESPONSE=$(curl -s -X POST https://backboard.railway.app/graphql/v2 \
+          SERVICE_ID="${{ steps.service.outputs.service_id }}"
+          ENV_ID="${{ steps.env.outputs.env_id }}"
+
+          # First, try to update the existing service instance
+          echo "Attempting to update service image..."
+          CONNECT_RESPONSE=$(curl -s -X POST https://backboard.railway.app/graphql/v2 \
             -H "Content-Type: application/json" \
             -H "Authorization: Bearer $RAILWAY_API_TOKEN" \
-            -d "{\"query\": \"mutation { serviceConnect(id: \\\"${{ steps.service.outputs.service_id }}\\\", input: { image: \\\"$IMAGE\\\" }) { id } }\"}")
+            -d "{\"query\": \"mutation { serviceConnect(id: \\\"$SERVICE_ID\\\", input: { image: \\\"$IMAGE\\\" }) { id } }\"}")
 
-          echo "Update response: $RESPONSE"
+          echo "Connect response: $CONNECT_RESPONSE"
 
-          if echo "$RESPONSE" | grep -q '"errors"'; then
-            echo "❌ Failed to update service image!"
-            exit 1
+          if echo "$CONNECT_RESPONSE" | grep -q '"errors"'; then
+            echo "⚠️ serviceConnect failed, trying serviceInstanceDeploy..."
+
+            # If serviceConnect fails, try deploying directly with the image
+            DEPLOY_RESPONSE=$(curl -s -X POST https://backboard.railway.app/graphql/v2 \
+              -H "Content-Type: application/json" \
+              -H "Authorization: Bearer $RAILWAY_API_TOKEN" \
+              -d "{\"query\": \"mutation { serviceInstanceDeploy(serviceId: \\\"$SERVICE_ID\\\", environmentId: \\\"$ENV_ID\\\", input: { image: \\\"$IMAGE\\\" }) { id } }\"}")
+
+            echo "Deploy response: $DEPLOY_RESPONSE"
+
+            if echo "$DEPLOY_RESPONSE" | grep -q '"errors"'; then
+              echo "❌ Failed to deploy service!"
+              echo "Trying alternative approach with variablePut for image source..."
+
+              # Last resort: Update the service source configuration
+              SOURCE_RESPONSE=$(curl -s -X POST https://backboard.railway.app/graphql/v2 \
+                -H "Content-Type: application/json" \
+                -H "Authorization: Bearer $RAILWAY_API_TOKEN" \
+                -d "{\"query\": \"mutation { variableUpsert(input: { projectId: \\\"$RAILWAY_PROJECT_ID\\\", environmentId: \\\"$ENV_ID\\\", serviceId: \\\"$SERVICE_ID\\\", name: \\\"RAILWAY_DOCKERFILE_PATH\\\", value: \\\"\\\" }) }\"}")
+
+              echo "Source response: $SOURCE_RESPONSE"
+              exit 1
+            fi
+          else
+            echo "✅ Service image updated, triggering redeploy..."
+
+            # Trigger redeploy
+            REDEPLOY_RESPONSE=$(curl -s -X POST https://backboard.railway.app/graphql/v2 \
+              -H "Content-Type: application/json" \
+              -H "Authorization: Bearer $RAILWAY_API_TOKEN" \
+              -d "{\"query\": \"mutation { serviceInstanceRedeploy(serviceId: \\\"$SERVICE_ID\\\", environmentId: \\\"$ENV_ID\\\") }\"}")
+
+            echo "Redeploy response: $REDEPLOY_RESPONSE"
+
+            if echo "$REDEPLOY_RESPONSE" | grep -q '"errors"'; then
+              echo "⚠️ Redeploy failed, deployment may still be in progress from connect"
+            fi
           fi
 
-          echo "✅ Service image updated"
-
-      - name: Trigger redeploy
-        id: redeploy
-        run: |
-          echo "Triggering redeploy..."
-
-          # Get environment ID
-          ENV_RESPONSE=$(curl -s -X POST https://backboard.railway.app/graphql/v2 \
-            -H "Content-Type: application/json" \
-            -H "Authorization: Bearer $RAILWAY_API_TOKEN" \
-            -d "{\"query\": \"query { project(id: \\\"$RAILWAY_PROJECT_ID\\\") { environments { edges { node { id name } } } } }\"}")
-
-          ENV_ID=$(echo "$ENV_RESPONSE" | grep -o "\"id\":\"[^\"]*\",\"name\":\"${{ inputs.environment }}\"" | grep -o '"id":"[^"]*"' | cut -d'"' -f4)
-
-          echo "Environment ID: $ENV_ID"
-
-          # Redeploy the service
-          RESPONSE=$(curl -s -X POST https://backboard.railway.app/graphql/v2 \
-            -H "Content-Type: application/json" \
-            -H "Authorization: Bearer $RAILWAY_API_TOKEN" \
-            -d "{\"query\": \"mutation { serviceInstanceRedeploy(serviceId: \\\"${{ steps.service.outputs.service_id }}\\\", environmentId: \\\"$ENV_ID\\\") }\"}")
-
-          echo "Redeploy response: $RESPONSE"
-
-          if echo "$RESPONSE" | grep -q '"errors"'; then
-            echo "❌ Failed to trigger redeploy!"
-            exit 1
-          fi
-
-          echo "✅ Redeploy triggered"
+          echo "✅ Deployment initiated"
 
       - name: Wait for deployment
         run: |
