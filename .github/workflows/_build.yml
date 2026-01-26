@@ -92,6 +92,44 @@ jobs:
           cache-from: type=gha,scope=${{ inputs.image-name }}-${{ inputs.cache-key }}
           cache-to: type=gha,mode=max,scope=${{ inputs.image-name }}-${{ inputs.cache-key }}
 
+      - name: Make package public
+        if: ${{ inputs.push }}
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Extract owner (could be user or org)
+          OWNER=$(echo "${{ github.repository }}" | cut -d'/' -f1)
+          PACKAGE_NAME="${{ inputs.image-name }}"
+          echo "Setting package $PACKAGE_NAME visibility to public for owner: $OWNER"
+
+          # First, try as user-scoped package
+          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" \
+            -X PATCH \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            "https://api.github.com/users/${OWNER}/packages/container/${PACKAGE_NAME}" \
+            -d '{"visibility":"public"}')
+
+          if [ "$RESPONSE" = "200" ]; then
+            echo "✅ Package visibility set to public (user-scoped)"
+            exit 0
+          fi
+
+          # If that fails, try as org-scoped package
+          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" \
+            -X PATCH \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            "https://api.github.com/orgs/${OWNER}/packages/container/${PACKAGE_NAME}" \
+            -d '{"visibility":"public"}')
+
+          if [ "$RESPONSE" = "200" ]; then
+            echo "✅ Package visibility set to public (org-scoped)"
+          else
+            echo "⚠️ Could not set package visibility (HTTP $RESPONSE). Railway may need GHCR credentials."
+          fi
+
       - name: Set build status
         id: build-result
         run: echo "status=success" >> $GITHUB_OUTPUT
