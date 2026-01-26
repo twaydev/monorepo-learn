@@ -36,11 +36,6 @@ jobs:
       RAILWAY_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
       RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
     steps:
-      - name: Install Railway CLI
-        run: |
-          curl -fsSL https://railway.com/install.sh | sh
-          echo "$HOME/.railway/bin" >> $GITHUB_PATH
-
       - name: Deploy service with image
         id: deploy
         run: |
@@ -50,18 +45,25 @@ jobs:
           echo "Service: ${{ inputs.service }}"
           echo "========================================"
 
+          # Install Railway CLI
+          npm install -g @railway/cli
+
           # Image URL from GHCR
           IMAGE="ghcr.io/${{ github.repository }}/${{ inputs.service }}:${{ inputs.version-tag }}"
           echo "Image: $IMAGE"
 
           # Deploy using Railway CLI
           # This handles service instance creation automatically
-          $HOME/.railway/bin/railway deploy \
+          railway deploy \
             --project "$RAILWAY_PROJECT_ID" \
             --environment "${{ inputs.environment }}" \
             --service "${{ inputs.service }}" \
             --image "$IMAGE" \
-            --detach
+            --detach || {
+              echo "⚠️ Railway CLI deploy failed, may require manual setup"
+              echo "Please configure the service in Railway dashboard to use image: $IMAGE"
+              exit 1
+            }
 
           echo "✅ Deployment initiated"
 
