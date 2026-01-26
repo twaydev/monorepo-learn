@@ -53,6 +53,7 @@ on:
 
 jobs:
   build:
+    name: ${{ inputs.image-name }}
     runs-on: ubuntu-latest
     permissions:
       packages: write

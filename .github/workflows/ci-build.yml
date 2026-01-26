@@ -133,7 +133,7 @@ jobs:
           fi
 
   build-images:
-    name: Build ${{ matrix.image-name }}
+    name: Build docker
     needs: prepare-matrix
     if: needs.prepare-matrix.outputs.has-services == 'true'
     strategy:
