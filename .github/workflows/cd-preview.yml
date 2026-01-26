@@ -54,27 +54,9 @@ jobs:
       cache-key: pr-${{ github.event.pull_request.number }}
     secrets: inherit
 
-  pre-deploy:
-    name: Pre-Deploy ${{ matrix.service }}
-    needs: [setup, build]
-    if: github.event.action != 'closed'
-    strategy:
-      fail-fast: false
-      matrix:
-        service:
-          - php-api
-          - go-api
-    uses: ./.github/workflows/_pre-deploy.yml
-    with:
-      environment: preview
-      service: ${{ matrix.service }}
-    secrets:
-      RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
-      RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
-
   deploy:
     name: Deploy ${{ matrix.service }}
-    needs: [setup, build, pre-deploy]
+    needs: [setup, build]
     if: github.event.action != 'closed'
     strategy:
       fail-fast: false
@@ -94,7 +76,7 @@ jobs:
 
   notify:
     name: Notify
-    needs: [setup, pre-deploy, deploy]
+    needs: [setup, build, deploy]
     if: github.event.action != 'closed' && success()
     uses: ./.github/workflows/_notify.yml
     permissions:

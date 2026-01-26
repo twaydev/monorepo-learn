@@ -31,26 +31,9 @@ jobs:
           BUILD_NUM=$(git rev-list --count HEAD)
           echo "version-tag=v1.0.0-staging.${BUILD_NUM}" >> $GITHUB_OUTPUT
 
-  pre-deploy:
-    name: Pre-Deploy ${{ matrix.service }}
-    needs: setup
-    strategy:
-      fail-fast: false
-      matrix:
-        service:
-          - php-api
-          - go-api
-    uses: ./.github/workflows/_pre-deploy.yml
-    with:
-      environment: staging
-      service: ${{ matrix.service }}
-    secrets:
-      RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
-      RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
-
   deploy:
     name: Deploy ${{ matrix.service }}
-    needs: [setup, pre-deploy]
+    needs: setup
     strategy:
       fail-fast: false
       matrix:
@@ -68,7 +51,7 @@ jobs:
 
   notify:
     name: Notify
-    needs: [setup, pre-deploy, deploy]
+    needs: [setup, deploy]
     if: success()
     uses: ./.github/workflows/_notify.yml
     permissions:
