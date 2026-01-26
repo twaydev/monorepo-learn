@@ -33,48 +33,13 @@ jobs:
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
     env:
-      RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
+      RAILWAY_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
       RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
     steps:
-      - name: Get service ID
-        id: service
+      - name: Install Railway CLI
         run: |
-          echo "Getting service ID for ${{ inputs.service }}..."
-
-          RESPONSE=$(curl -s -X POST https://backboard.railway.app/graphql/v2 \
-            -H "Content-Type: application/json" \
-            -H "Authorization: Bearer $RAILWAY_API_TOKEN" \
-            -d "{\"query\": \"query { project(id: \\\"$RAILWAY_PROJECT_ID\\\") { services { edges { node { id name } } } } }\"}")
-
-          SERVICE_ID=$(echo "$RESPONSE" | grep -o "\"id\":\"[^\"]*\",\"name\":\"${{ inputs.service }}\"" | grep -o '"id":"[^"]*"' | cut -d'"' -f4)
-
-          if [ -z "$SERVICE_ID" ]; then
-            echo "❌ Service '${{ inputs.service }}' not found!"
-            echo "$RESPONSE"
-            exit 1
-          fi
-
-          echo "Service ID: $SERVICE_ID"
-          echo "service_id=$SERVICE_ID" >> $GITHUB_OUTPUT
-
-      - name: Get environment ID
-        id: env
-        run: |
-          ENV_RESPONSE=$(curl -s -X POST https://backboard.railway.app/graphql/v2 \
-            -H "Content-Type: application/json" \
-            -H "Authorization: Bearer $RAILWAY_API_TOKEN" \
-            -d "{\"query\": \"query { project(id: \\\"$RAILWAY_PROJECT_ID\\\") { environments { edges { node { id name } } } } }\"}")
-
-          ENV_ID=$(echo "$ENV_RESPONSE" | grep -o "\"id\":\"[^\"]*\",\"name\":\"${{ inputs.environment }}\"" | grep -o '"id":"[^"]*"' | cut -d'"' -f4)
-
-          if [ -z "$ENV_ID" ]; then
-            echo "❌ Environment '${{ inputs.environment }}' not found!"
-            echo "$ENV_RESPONSE"
-            exit 1
-          fi
-
-          echo "Environment ID: $ENV_ID"
-          echo "env_id=$ENV_ID" >> $GITHUB_OUTPUT
+          curl -fsSL https://railway.com/install.sh | sh
+          echo "$HOME/.railway/bin" >> $GITHUB_PATH
 
       - name: Deploy service with image
         id: deploy
@@ -89,79 +54,35 @@ jobs:
           IMAGE="ghcr.io/${{ github.repository }}/${{ inputs.service }}:${{ inputs.version-tag }}"
           echo "Image: $IMAGE"
 
-          SERVICE_ID="${{ steps.service.outputs.service_id }}"
-          ENV_ID="${{ steps.env.outputs.env_id }}"
-
-          # First, try to update the existing service instance
-          echo "Attempting to update service image..."
-          CONNECT_RESPONSE=$(curl -s -X POST https://backboard.railway.app/graphql/v2 \
-            -H "Content-Type: application/json" \
-            -H "Authorization: Bearer $RAILWAY_API_TOKEN" \
-            -d "{\"query\": \"mutation { serviceConnect(id: \\\"$SERVICE_ID\\\", input: { image: \\\"$IMAGE\\\" }) { id } }\"}")
-
-          echo "Connect response: $CONNECT_RESPONSE"
-
-          if echo "$CONNECT_RESPONSE" | grep -q '"errors"'; then
-            echo "⚠️ serviceConnect failed (ServiceInstance may not exist yet)"
-            echo "Setting up image source for service..."
-
-            # First, set the service source to use Docker image
-            # Using serviceUpdate to configure the image source
-            SOURCE_RESPONSE=$(curl -s -X POST https://backboard.railway.app/graphql/v2 \
-              -H "Content-Type: application/json" \
-              -H "Authorization: Bearer $RAILWAY_API_TOKEN" \
-              -d "{\"query\": \"mutation { serviceUpdate(id: \\\"$SERVICE_ID\\\", input: { source: { image: \\\"$IMAGE\\\" } }) { id } }\"}")
-
-            echo "Source update response: $SOURCE_RESPONSE"
-
-            if echo "$SOURCE_RESPONSE" | grep -q '"errors"'; then
-              echo "⚠️ serviceUpdate failed, trying direct deploy..."
-
-              # Try just triggering a deploy (service might already be configured)
-              DEPLOY_RESPONSE=$(curl -s -X POST https://backboard.railway.app/graphql/v2 \
-                -H "Content-Type: application/json" \
-                -H "Authorization: Bearer $RAILWAY_API_TOKEN" \
-                -d "{\"query\": \"mutation { serviceInstanceDeploy(serviceId: \\\"$SERVICE_ID\\\", environmentId: \\\"$ENV_ID\\\") }\"}")
-
-              echo "Deploy response: $DEPLOY_RESPONSE"
-
-              if echo "$DEPLOY_RESPONSE" | grep -q '"errors"'; then
-                echo "❌ Failed to deploy service!"
-                echo "The php-api service may need to be manually configured in Railway dashboard."
-                echo "Please go to Railway dashboard, select php-api service, and configure it to use Docker image:"
-                echo "Image: $IMAGE"
-                exit 1
-              fi
-            else
-              # Source updated, now trigger deployment
-              DEPLOY_RESPONSE=$(curl -s -X POST https://backboard.railway.app/graphql/v2 \
-                -H "Content-Type: application/json" \
-                -H "Authorization: Bearer $RAILWAY_API_TOKEN" \
-                -d "{\"query\": \"mutation { serviceInstanceDeploy(serviceId: \\\"$SERVICE_ID\\\", environmentId: \\\"$ENV_ID\\\") }\"}")
-
-              echo "Deploy trigger response: $DEPLOY_RESPONSE"
-            fi
-          else
-            echo "✅ Service image updated, triggering redeploy..."
-
-            # Trigger redeploy
-            REDEPLOY_RESPONSE=$(curl -s -X POST https://backboard.railway.app/graphql/v2 \
-              -H "Content-Type: application/json" \
-              -H "Authorization: Bearer $RAILWAY_API_TOKEN" \
-              -d "{\"query\": \"mutation { serviceInstanceRedeploy(serviceId: \\\"$SERVICE_ID\\\", environmentId: \\\"$ENV_ID\\\") }\"}")
-
-            echo "Redeploy response: $REDEPLOY_RESPONSE"
-
-            if echo "$REDEPLOY_RESPONSE" | grep -q '"errors"'; then
-              echo "⚠️ Redeploy failed, deployment may still be in progress from connect"
-            fi
-          fi
+          # Deploy using Railway CLI
+          # This handles service instance creation automatically
+          $HOME/.railway/bin/railway deploy \
+            --project "$RAILWAY_PROJECT_ID" \
+            --environment "${{ inputs.environment }}" \
+            --service "${{ inputs.service }}" \
+            --image "$IMAGE" \
+            --detach
 
           echo "✅ Deployment initiated"
 
       - name: Wait for deployment
+        env:
+          RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
         run: |
           echo "Waiting for deployment to complete..."
+
+          # Get service ID
+          RESPONSE=$(curl -s -X POST https://backboard.railway.app/graphql/v2 \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer $RAILWAY_API_TOKEN" \
+            -d "{\"query\": \"query { project(id: \\\"$RAILWAY_PROJECT_ID\\\") { services { edges { node { id name } } } } }\"}")
+
+          SERVICE_ID=$(echo "$RESPONSE" | grep -o "\"id\":\"[^\"]*\",\"name\":\"${{ inputs.service }}\"" | grep -o '"id":"[^"]*"' | cut -d'"' -f4)
+
+          if [ -z "$SERVICE_ID" ]; then
+            echo "⚠️ Could not find service ID, skipping status check"
+            exit 0
+          fi
 
           MAX_ATTEMPTS=30
           ATTEMPT=0
@@ -173,7 +94,7 @@ jobs:
             RESPONSE=$(curl -s -X POST https://backboard.railway.app/graphql/v2 \
               -H "Content-Type: application/json" \
               -H "Authorization: Bearer $RAILWAY_API_TOKEN" \
-              -d "{\"query\": \"query { service(id: \\\"${{ steps.service.outputs.service_id }}\\\") { deployments(first: 1) { edges { node { status } } } } }\"}")
+              -d "{\"query\": \"query { service(id: \\\"$SERVICE_ID\\\") { deployments(first: 1) { edges { node { status } } } } }\"}")
 
             STATUS=$(echo "$RESPONSE" | grep -o '"status":"[^"]*"' | head -1 | cut -d'"' -f4)
             echo "Status: $STATUS"
