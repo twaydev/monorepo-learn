@@ -26,6 +26,7 @@ func healthHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{
 		"status":  "ok",
 		"service": "go-api-service",
+		"version": "0.0.0",
 	})
 }
 
