@@ -28,8 +28,9 @@ jobs:
       - name: Calculate version
         id: version
         run: |
-          BUILD_NUM=$(git rev-list --count HEAD)
-          echo "version-tag=v1.0.0-staging.${BUILD_NUM}" >> $GITHUB_OUTPUT
+          # Use staging-latest tag for consistent deployments
+          # This tag is always updated by CI when images are built
+          echo "version-tag=staging-latest" >> $GITHUB_OUTPUT
 
   deploy:
     name: Deploy ${{ matrix.service }}

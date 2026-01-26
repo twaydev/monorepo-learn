@@ -36,6 +36,32 @@ jobs:
       RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
       RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
     steps:
+      - name: Verify image exists in GHCR
+        run: |
+          IMAGE="ghcr.io/${{ github.repository }}/${{ inputs.service }}:${{ inputs.version-tag }}"
+          echo "Checking if image exists: $IMAGE"
+
+          # Use GitHub API to check if the package version exists
+          PACKAGE_NAME="${{ inputs.service }}"
+          VERSION_TAG="${{ inputs.version-tag }}"
+
+          # Try to get package versions
+          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" \
+            -H "Authorization: Bearer ${{ github.token }}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/orgs/${{ github.repository_owner }}/packages/container/${PACKAGE_NAME}/versions" 2>/dev/null || echo "000")
+
+          if [ "$RESPONSE" = "404" ]; then
+            echo "❌ Image package '${PACKAGE_NAME}' not found in GHCR!"
+            echo "The CI workflow may have skipped building images because no service code changed."
+            echo "Please ensure at least one successful CI build has completed before deploying."
+            exit 1
+          elif [ "$RESPONSE" != "200" ]; then
+            echo "⚠️ Could not verify image exists (HTTP $RESPONSE), continuing anyway..."
+          else
+            echo "✅ Package found, proceeding with deployment"
+          fi
+
       - name: Get service ID
         id: service
         run: |

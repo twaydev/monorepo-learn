@@ -4,12 +4,19 @@ on:
   workflow_run:
     workflows: [Trigger Setup]
     types: [completed]
+  workflow_dispatch:
+    inputs:
+      build_all:
+        description: "Build all services (ignore change detection)"
+        required: false
+        type: boolean
+        default: true
 
 jobs:
   load-config:
     name: Load Configuration
     runs-on: ubuntu-latest
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     outputs:
       environment: ${{ steps.config.outputs.environment }}
       version-tag: ${{ steps.config.outputs.version-tag }}
@@ -18,13 +25,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
           fetch-depth: 0
 
       - name: Determine configuration
         id: config
         run: |
-          REF="${{ github.event.workflow_run.head_branch }}"
+          # Get branch name from workflow_run or current ref
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            REF="${{ github.ref_name }}"
+          else
+            REF="${{ github.event.workflow_run.head_branch }}"
+          fi
           echo "branch=${REF}" >> $GITHUB_OUTPUT
 
           if [ "$REF" = "main" ]; then
@@ -57,6 +69,21 @@ jobs:
             exit 1
           fi
 
+          # Convert YAML to JSON first
+          SERVICES_JSON=$(yq eval -o=json "$SERVICES_FILE")
+
+          # Check if we should build all services
+          BUILD_ALL="${{ inputs.build_all || 'false' }}"
+
+          if [ "$BUILD_ALL" = "true" ]; then
+            echo "Building all services (manual trigger with build_all=true)"
+            MATRIX_JSON=$(echo "$SERVICES_JSON" | jq -c '{include: .services}')
+            echo "matrix=${MATRIX_JSON}" >> $GITHUB_OUTPUT
+            echo "Services to build:"
+            echo "$SERVICES_JSON" | jq -r '.services[] | .["image-name"]'
+            exit 0
+          fi
+
           # Get the list of changed files
           if [ "${{ github.event.workflow_run.event }}" = "pull_request" ]; then
             BASE_SHA="${{ github.event.workflow_run.pull_requests[0].base.sha }}"
@@ -77,9 +104,6 @@ jobs:
           # Filter services that need rebuilding
           FILTERED_SERVICES="[]"
 
-          # Convert YAML to JSON first
-          SERVICES_JSON=$(yq eval -o=json "$SERVICES_FILE")
-          
           # Iterate through services
           for row in $(echo "$SERVICES_JSON" | jq -r '.services[] | @base64'); do
             _jq() {
