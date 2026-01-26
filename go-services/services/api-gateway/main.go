@@ -42,6 +42,7 @@ func main() {
 			json.NewEncoder(w).Encode(map[string]string{
 				"status":  "ok",
 				"service": "go-gateway",
+				"version": "1.0.1",
 			})
 		default:
 			// Route everything else to frontend
