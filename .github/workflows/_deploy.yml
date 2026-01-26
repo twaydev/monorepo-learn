@@ -102,28 +102,44 @@ jobs:
           echo "Connect response: $CONNECT_RESPONSE"
 
           if echo "$CONNECT_RESPONSE" | grep -q '"errors"'; then
-            echo "⚠️ serviceConnect failed, trying serviceInstanceDeploy..."
+            echo "⚠️ serviceConnect failed (ServiceInstance may not exist yet)"
+            echo "Setting up image source for service..."
 
-            # If serviceConnect fails, try deploying directly with the image
-            DEPLOY_RESPONSE=$(curl -s -X POST https://backboard.railway.app/graphql/v2 \
+            # First, set the service source to use Docker image
+            # Using serviceUpdate to configure the image source
+            SOURCE_RESPONSE=$(curl -s -X POST https://backboard.railway.app/graphql/v2 \
               -H "Content-Type: application/json" \
               -H "Authorization: Bearer $RAILWAY_API_TOKEN" \
-              -d "{\"query\": \"mutation { serviceInstanceDeploy(serviceId: \\\"$SERVICE_ID\\\", environmentId: \\\"$ENV_ID\\\", input: { image: \\\"$IMAGE\\\" }) { id } }\"}")
+              -d "{\"query\": \"mutation { serviceUpdate(id: \\\"$SERVICE_ID\\\", input: { source: { image: \\\"$IMAGE\\\" } }) { id } }\"}")
 
-            echo "Deploy response: $DEPLOY_RESPONSE"
+            echo "Source update response: $SOURCE_RESPONSE"
 
-            if echo "$DEPLOY_RESPONSE" | grep -q '"errors"'; then
-              echo "❌ Failed to deploy service!"
-              echo "Trying alternative approach with variablePut for image source..."
+            if echo "$SOURCE_RESPONSE" | grep -q '"errors"'; then
+              echo "⚠️ serviceUpdate failed, trying direct deploy..."
 
-              # Last resort: Update the service source configuration
-              SOURCE_RESPONSE=$(curl -s -X POST https://backboard.railway.app/graphql/v2 \
+              # Try just triggering a deploy (service might already be configured)
+              DEPLOY_RESPONSE=$(curl -s -X POST https://backboard.railway.app/graphql/v2 \
                 -H "Content-Type: application/json" \
                 -H "Authorization: Bearer $RAILWAY_API_TOKEN" \
-                -d "{\"query\": \"mutation { variableUpsert(input: { projectId: \\\"$RAILWAY_PROJECT_ID\\\", environmentId: \\\"$ENV_ID\\\", serviceId: \\\"$SERVICE_ID\\\", name: \\\"RAILWAY_DOCKERFILE_PATH\\\", value: \\\"\\\" }) }\"}")
+                -d "{\"query\": \"mutation { serviceInstanceDeploy(serviceId: \\\"$SERVICE_ID\\\", environmentId: \\\"$ENV_ID\\\") }\"}")
 
-              echo "Source response: $SOURCE_RESPONSE"
-              exit 1
+              echo "Deploy response: $DEPLOY_RESPONSE"
+
+              if echo "$DEPLOY_RESPONSE" | grep -q '"errors"'; then
+                echo "❌ Failed to deploy service!"
+                echo "The php-api service may need to be manually configured in Railway dashboard."
+                echo "Please go to Railway dashboard, select php-api service, and configure it to use Docker image:"
+                echo "Image: $IMAGE"
+                exit 1
+              fi
+            else
+              # Source updated, now trigger deployment
+              DEPLOY_RESPONSE=$(curl -s -X POST https://backboard.railway.app/graphql/v2 \
+                -H "Content-Type: application/json" \
+                -H "Authorization: Bearer $RAILWAY_API_TOKEN" \
+                -d "{\"query\": \"mutation { serviceInstanceDeploy(serviceId: \\\"$SERVICE_ID\\\", environmentId: \\\"$ENV_ID\\\") }\"}")
+
+              echo "Deploy trigger response: $DEPLOY_RESPONSE"
             fi
           else
             echo "✅ Service image updated, triggering redeploy..."
