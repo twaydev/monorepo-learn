@@ -81,6 +81,7 @@ jobs:
             type=raw,value=${{ inputs.environment }}-latest
 
       - name: Build and push
+        id: build
         uses: docker/build-push-action@v5
         with:
           context: ${{ inputs.context }}
@@ -91,6 +92,35 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=${{ inputs.image-name }}-${{ inputs.cache-key }}
           cache-to: type=gha,mode=max,scope=${{ inputs.image-name }}-${{ inputs.cache-key }}
+
+      - name: Summary
+        run: |
+          echo "## Build: ${{ inputs.image-name }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Configuration" >> $GITHUB_STEP_SUMMARY
+          echo "| Parameter | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Image Name | \`${{ inputs.image-name }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Environment | \`${{ inputs.environment }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Version Tag | \`${{ inputs.version-tag }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Dockerfile | \`${{ inputs.dockerfile }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Context | \`${{ inputs.context }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Platforms | \`${{ inputs.platforms }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Push | \`${{ inputs.push }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Image Tags" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "${{ steps.meta.outputs.tags }}" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Result" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ inputs.push }}" = "true" ]; then
+            echo "✅ Image built and pushed to GHCR" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Image Digest:** \`${{ steps.build.outputs.digest }}\`" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "✅ Image built (not pushed)" >> $GITHUB_STEP_SUMMARY
+          fi
 
       - name: Make package public
         if: ${{ inputs.push }}
