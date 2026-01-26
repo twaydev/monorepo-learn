@@ -1,23 +1,30 @@
-name: Trigger Setup
+name: CI Pipeline
 
 on:
   push:
     branches: [main, develop]
     paths:
       - "go-services/**"
-      - "rust-services/**"
+      # - "rust-services/**"
       - "php-services/**"
-      - "frontend/**"
+      # - "frontend/**"
       - "docker/**"
       - ".github/workflows/**"
   pull_request:
     branches: [main, develop]
     paths:
       - "go-services/**"
-      - "rust-services/**"
+      # - "rust-services/**"
       - "php-services/**"
-      - "frontend/**"
+      # - "frontend/**"
       - "docker/**"
+  workflow_dispatch:
+    inputs:
+      build_all:
+        description: "Build all services (ignore change detection)"
+        required: false
+        type: boolean
+        default: true
 
 jobs:
   setup:
@@ -26,7 +33,7 @@ jobs:
     outputs:
       environment: ${{ steps.config.outputs.environment }}
       version-tag: ${{ steps.config.outputs.version-tag }}
-      should-build: ${{ steps.changes.outputs.should-build }}
+      branch: ${{ steps.config.outputs.branch }}
       changed-services: ${{ steps.changes.outputs.changed-services }}
     steps:
       - uses: actions/checkout@v4
@@ -36,56 +43,86 @@ jobs:
       - name: Detect changes
         id: changes
         run: |
+          # For manual dispatch with build_all, skip change detection
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.build_all }}" = "true" ]; then
+            echo "changed-services=all" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # Determine base SHA for comparison
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             BASE_SHA=${{ github.event.pull_request.base.sha }}
-          else
+          elif [ "${{ github.event_name }}" = "push" ]; then
             BASE_SHA=${{ github.event.before }}
+            # Handle initial commit or force push
+            if [ "$BASE_SHA" = "0000000000000000000000000000000000000000" ]; then
+              echo "Initial commit detected, building all services"
+              echo "changed-services=all" >> $GITHUB_OUTPUT
+              exit 0
+            fi
+          else
+            # workflow_dispatch without build_all
+            echo "changed-services=" >> $GITHUB_OUTPUT
+            exit 0
           fi
 
           CHANGED_FILES=$(git diff --name-only $BASE_SHA ${{ github.sha }} 2>/dev/null || echo "")
 
+          if [ -z "$CHANGED_FILES" ]; then
+            echo "No changed files detected"
+            echo "changed-services=" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          echo "Changed files:"
+          echo "$CHANGED_FILES"
+          echo ""
+
           CHANGED_SERVICES=""
-          if echo "$CHANGED_FILES" | grep -q "^php-services/\|^docker/Dockerfile.php-api"; then
+          if echo "$CHANGED_FILES" | grep -qE "^php-services/|^docker/Dockerfile\.php-api"; then
             CHANGED_SERVICES="${CHANGED_SERVICES}php-api,"
           fi
-          if echo "$CHANGED_FILES" | grep -q "^go-services/\|^docker/Dockerfile.go-api"; then
+          if echo "$CHANGED_FILES" | grep -qE "^go-services/|^docker/Dockerfile\.go-api"; then
             CHANGED_SERVICES="${CHANGED_SERVICES}go-api,"
           fi
-          if echo "$CHANGED_FILES" | grep -q "^rust-services/\|^docker/Dockerfile.rust-api"; then
-            CHANGED_SERVICES="${CHANGED_SERVICES}rust-api,"
-          fi
-          if echo "$CHANGED_FILES" | grep -q "^frontend/\|^docker/Dockerfile.frontend"; then
-            CHANGED_SERVICES="${CHANGED_SERVICES}frontend,"
-          fi
+          # Uncomment when ready:
+          # if echo "$CHANGED_FILES" | grep -qE "^rust-services/|^docker/Dockerfile\.rust-api"; then
+          #   CHANGED_SERVICES="${CHANGED_SERVICES}rust-api,"
+          # fi
+          # if echo "$CHANGED_FILES" | grep -qE "^frontend/|^docker/Dockerfile\.frontend"; then
+          #   CHANGED_SERVICES="${CHANGED_SERVICES}frontend,"
+          # fi
 
+          # Remove trailing comma
           CHANGED_SERVICES="${CHANGED_SERVICES%,}"
 
-          if [ -n "$CHANGED_SERVICES" ]; then
-            echo "should-build=true" >> $GITHUB_OUTPUT
-            echo "changed-services=$CHANGED_SERVICES" >> $GITHUB_OUTPUT
-          else
-            echo "should-build=false" >> $GITHUB_OUTPUT
-            echo "changed-services=" >> $GITHUB_OUTPUT
-          fi
+          echo "Changed services: $CHANGED_SERVICES"
+          echo "changed-services=$CHANGED_SERVICES" >> $GITHUB_OUTPUT
 
-      - name: Determine environment
+      - name: Determine environment and version
         id: config
         run: |
+          # Determine branch
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BRANCH="${{ github.head_ref }}"
+          else
+            BRANCH="${{ github.ref_name }}"
+          fi
+          echo "branch=${BRANCH}" >> $GITHUB_OUTPUT
+
+          # Determine environment and version tag
           if [ "${{ github.ref }}" = "refs/heads/main" ]; then
             echo "environment=production" >> $GITHUB_OUTPUT
-
             LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
             echo "version-tag=${LATEST_TAG}" >> $GITHUB_OUTPUT
 
           elif [ "${{ github.ref }}" = "refs/heads/develop" ]; then
             echo "environment=staging" >> $GITHUB_OUTPUT
-
             BUILD_NUM=$(git rev-list --count HEAD)
             echo "version-tag=v1.0.0-staging.${BUILD_NUM}" >> $GITHUB_OUTPUT
 
           else
             echo "environment=preview" >> $GITHUB_OUTPUT
-
             COMMIT_SHA=$(git rev-parse --short HEAD)
             echo "version-tag=dev-${COMMIT_SHA}" >> $GITHUB_OUTPUT
           fi
@@ -95,5 +132,19 @@ jobs:
           echo "## Build Configuration" >> $GITHUB_STEP_SUMMARY
           echo "- **Environment:** ${{ steps.config.outputs.environment }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Version Tag:** ${{ steps.config.outputs.version-tag }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Should Build:** ${{ steps.changes.outputs.should-build }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Branch:** ${{ steps.config.outputs.branch }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Changed Services:** ${{ steps.changes.outputs.changed-services }}" >> $GITHUB_STEP_SUMMARY
+
+  build:
+    name: Build Images
+    needs: setup
+    if: needs.setup.outputs.changed-services != ''
+    uses: ./.github/workflows/ci-build.yml
+    permissions:
+      packages: write
+    with:
+      environment: ${{ needs.setup.outputs.environment }}
+      version-tag: ${{ needs.setup.outputs.version-tag }}
+      branch: ${{ needs.setup.outputs.branch }}
+      changed-services: ${{ needs.setup.outputs.changed-services }}
+    secrets: inherit

@@ -1,150 +1,112 @@
 name: CI - Build Images
 
 on:
-  workflow_run:
-    workflows: [Trigger Setup]
-    types: [completed]
-  workflow_dispatch:
+  workflow_call:
     inputs:
-      build_all:
-        description: "Build all services (ignore change detection)"
+      environment:
+        description: "Environment (production|staging|preview)"
+        required: true
+        type: string
+      version-tag:
+        description: "Version tag for images"
+        required: true
+        type: string
+      branch:
+        description: "Branch name"
+        required: true
+        type: string
+      changed-services:
+        description: "Comma-separated list of changed services (empty = none, 'all' = build all)"
         required: false
-        type: boolean
-        default: true
+        type: string
+        default: ""
 
 jobs:
-  load-config:
-    name: Load Configuration
+  prepare-matrix:
+    name: Prepare Build Matrix
     runs-on: ubuntu-latest
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     outputs:
-      environment: ${{ steps.config.outputs.environment }}
-      version-tag: ${{ steps.config.outputs.version-tag }}
-      branch: ${{ steps.config.outputs.branch }}
-      matrix: ${{ steps.changes.outputs.matrix }}
+      matrix: ${{ steps.matrix.outputs.matrix }}
+      has-services: ${{ steps.matrix.outputs.has-services }}
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
-          fetch-depth: 0
-
-      - name: Determine configuration
-        id: config
-        run: |
-          # Get branch name from workflow_run or current ref
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            REF="${{ github.ref_name }}"
-          else
-            REF="${{ github.event.workflow_run.head_branch }}"
-          fi
-          echo "branch=${REF}" >> $GITHUB_OUTPUT
-
-          if [ "$REF" = "main" ]; then
-            echo "environment=production" >> $GITHUB_OUTPUT
-            LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
-            echo "version-tag=${LATEST_TAG}" >> $GITHUB_OUTPUT
-          elif [ "$REF" = "develop" ]; then
-            echo "environment=staging" >> $GITHUB_OUTPUT
-            BUILD_NUM=$(git rev-list --count HEAD)
-            echo "version-tag=v1.0.0-staging.${BUILD_NUM}" >> $GITHUB_OUTPUT
-          else
-            echo "environment=preview" >> $GITHUB_OUTPUT
-            COMMIT_SHA=$(git rev-parse --short HEAD)
-            echo "version-tag=dev-${COMMIT_SHA}" >> $GITHUB_OUTPUT
-          fi
 
       - name: Install yq
         run: |
-          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/download/v4.40.5/yq_linux_amd64
           sudo chmod +x /usr/local/bin/yq
 
-      - name: Detect code changes and ci matrix
-        id: changes
+      - name: Build matrix from changed services
+        id: matrix
         run: |
-          # Load service configuration from ci-matrix.yml
           SERVICES_FILE=".github/ci-matrix.yml"
+          CHANGED_SERVICES="${{ inputs.changed-services }}"
 
           if [ ! -f "$SERVICES_FILE" ]; then
             echo "Error: $SERVICES_FILE not found"
             exit 1
           fi
 
-          # Convert YAML to JSON first
+          # Convert YAML to JSON
           SERVICES_JSON=$(yq eval -o=json "$SERVICES_FILE")
 
-          # Check if we should build all services
-          BUILD_ALL="${{ inputs.build_all || 'false' }}"
-
-          if [ "$BUILD_ALL" = "true" ]; then
-            echo "Building all services (manual trigger with build_all=true)"
+          # If 'all' is passed, build all services
+          if [ "$CHANGED_SERVICES" = "all" ]; then
+            echo "Building all services"
             MATRIX_JSON=$(echo "$SERVICES_JSON" | jq -c '{include: .services}')
             echo "matrix=${MATRIX_JSON}" >> $GITHUB_OUTPUT
-            echo "Services to build:"
-            echo "$SERVICES_JSON" | jq -r '.services[] | .["image-name"]'
+            echo "has-services=true" >> $GITHUB_OUTPUT
             exit 0
           fi
 
-          # Get the list of changed files
-          if [ "${{ github.event.workflow_run.event }}" = "pull_request" ]; then
-            BASE_SHA="${{ github.event.workflow_run.pull_requests[0].base.sha }}"
-            HEAD_SHA="${{ github.event.workflow_run.head_sha }}"
-          else
-            # For push events, compare with previous commit
-            BASE_SHA="${{ github.event.workflow_run.head_sha }}~1"
-            HEAD_SHA="${{ github.event.workflow_run.head_sha }}"
+          # If empty, no services to build
+          if [ -z "$CHANGED_SERVICES" ]; then
+            echo "No services to build"
+            echo "matrix={\"include\":[]}" >> $GITHUB_OUTPUT
+            echo "has-services=false" >> $GITHUB_OUTPUT
+            exit 0
           fi
 
-          echo "Comparing ${BASE_SHA}...${HEAD_SHA}"
-          CHANGED_FILES=$(git diff --name-only ${BASE_SHA} ${HEAD_SHA} || echo "")
-
-          echo "Changed files:"
-          echo "$CHANGED_FILES"
-          echo ""
-
-          # Filter services that need rebuilding
+          # Filter services based on changed-services list
           FILTERED_SERVICES="[]"
 
-          # Iterate through services
-          for row in $(echo "$SERVICES_JSON" | jq -r '.services[] | @base64'); do
-            _jq() {
-              echo ${row} | base64 --decode | jq -r ${1}
-            }
+          # Convert comma-separated list to array
+          IFS=',' read -ra SERVICE_ARRAY <<< "$CHANGED_SERVICES"
 
-            SERVICE_NAME=$(_jq '.["image-name"]')
-            SOURCE_PATH=$(_jq '.["source-path"]')
-            DOCKERFILE=$(_jq '.dockerfile')
+          for SERVICE_NAME in "${SERVICE_ARRAY[@]}"; do
+            # Trim whitespace
+            SERVICE_NAME=$(echo "$SERVICE_NAME" | xargs)
 
-            # Build regex pattern: source path + dockerfile + shared-schemas
-            PATTERN="^(${SOURCE_PATH}/|${DOCKERFILE}|shared-schemas/)"
+            # Find matching service in ci-matrix.yml
+            SERVICE_JSON=$(echo "$SERVICES_JSON" | jq -c --arg name "$SERVICE_NAME" '.services[] | select(.["image-name"] == $name)')
 
-            if echo "$CHANGED_FILES" | grep -qE "$PATTERN"; then
-              echo "✓ ${SERVICE_NAME} needs rebuild (changes detected)"
-              # Add service to filtered list
-              SERVICE_JSON=$(echo ${row} | base64 --decode)
+            if [ -n "$SERVICE_JSON" ]; then
+              echo "✓ Adding ${SERVICE_NAME} to build matrix"
               FILTERED_SERVICES=$(echo "$FILTERED_SERVICES" | jq --argjson item "$SERVICE_JSON" '. += [$item]')
             else
-              echo "○ ${SERVICE_NAME} unchanged"
+              echo "⚠ Service ${SERVICE_NAME} not found in ci-matrix.yml"
             fi
           done
 
-          # Output the filtered matrix
+          # Output the matrix
           if [ "$(echo "$FILTERED_SERVICES" | jq 'length')" -eq 0 ]; then
             echo "matrix={\"include\":[]}" >> $GITHUB_OUTPUT
-            echo "No services need rebuilding"
+            echo "has-services=false" >> $GITHUB_OUTPUT
           else
             MATRIX_JSON=$(echo "$FILTERED_SERVICES" | jq -c '{include: .}')
             echo "matrix=${MATRIX_JSON}" >> $GITHUB_OUTPUT
+            echo "has-services=true" >> $GITHUB_OUTPUT
             echo "Services to build:"
             echo "$FILTERED_SERVICES" | jq -r '.[] | .["image-name"]'
           fi
 
   build-images:
     name: Build ${{ matrix.image-name }}
-    needs: load-config
-    if: fromJSON(needs.load-config.outputs.matrix).include[0] != null
+    needs: prepare-matrix
+    if: needs.prepare-matrix.outputs.has-services == 'true'
     strategy:
       fail-fast: false
-      matrix: ${{ fromJSON(needs.load-config.outputs.matrix) }}
+      matrix: ${{ fromJSON(needs.prepare-matrix.outputs.matrix) }}
     uses: ./.github/workflows/_build.yml
     permissions:
       packages: write
@@ -153,8 +115,8 @@ jobs:
       image-name: ${{ matrix.image-name }}
       context: ${{ matrix.context }}
       platforms: ${{ matrix.platforms }}
-      push: ${{ needs.load-config.outputs.branch == 'main' || needs.load-config.outputs.branch == 'develop' }}
-      cache-key: ${{ needs.load-config.outputs.branch }}
-      environment: ${{ needs.load-config.outputs.environment }}
-      version-tag: ${{ needs.load-config.outputs.version-tag }}
+      push: ${{ inputs.branch == 'main' || inputs.branch == 'develop' }}
+      cache-key: ${{ inputs.branch }}
+      environment: ${{ inputs.environment }}
+      version-tag: ${{ inputs.version-tag }}
     secrets: inherit
